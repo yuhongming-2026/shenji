@@ -1,5 +1,5 @@
 """
-统计异常检测器 - Z-Score 和 IQR 离群值检测
+统计异常检测器 - Z-Score 和 IQR 离群值检测。
 """
 from __future__ import annotations
 
