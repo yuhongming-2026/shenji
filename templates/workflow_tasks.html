@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}任务中心{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0"><i class="bi bi-list-task"></i> 任务中心</h4>
+  <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#taskModal">新建任务</button>
+</div>
+<div class="row g-3">
+  <div class="col-lg-7"><div class="card border-0 shadow-sm"><div class="card-body p-0">
+    <table class="table table-hover mb-0"><thead><tr><th>任务</th><th>状态</th><th>截止</th><th></th></tr></thead>
+    <tbody id="taskBody"><tr><td colspan="4" class="text-center py-4">加载中…</td></tr></tbody></table>
+  </div></div></div>
+  <div class="col-lg-5"><div class="card border-0 shadow-sm"><div class="card-header bg-transparent"><strong>任务讨论</strong> <small class="text-muted">支持 @用户名</small></div>
+    <div class="card-body" id="commentBox" style="max-height:320px;overflow:auto"><div class="text-muted small">选择任务查看评论</div></div>
+    <div class="card-footer"><input class="form-control form-control-sm" id="commentInput" placeholder="输入评论，@好友 提醒…" onkeydown="if(event.key==='Enter')postComment()">
+    </div></div></div>
+</div>
+<div class="modal fade" id="taskModal"><div class="modal-dialog"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">新建任务</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">
+  <input class="form-control mb-2" id="taskTitle" placeholder="任务标题">
+  <textarea class="form-control mb-2" id="taskDesc" rows="2" placeholder="描述"></textarea>
+  <input type="date" class="form-control" id="taskDue">
+</div>
+<div class="modal-footer"><button class="btn btn-primary" onclick="createTask()">创建</button></div>
+</div></div></div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+let selectedTask = null;
+document.addEventListener('DOMContentLoaded', loadTasks);
+function loadTasks() {
+  fetch('/api/workflow/tasks').then(r=>r.json()).then(d => {
+    document.getElementById('taskBody').innerHTML = (d.tasks||[]).map(t => `<tr style="cursor:pointer" onclick="selectTask(${t.id})">
+      <td><strong>${t.title}</strong><div class="small text-muted">${t.description||''}</div></td>
+      <td><span class="badge bg-${t.status==='done'?'success':'secondary'}">${t.status}</span></td>
+      <td class="small">${t.due_date||'-'}</td>
+      <td>${t.status!=='done'?`<button class="btn btn-sm btn-outline-success" onclick="event.stopPropagation();doneTask(${t.id})">完成</button>`:''}</td></tr>`).join('') ||
+      '<tr><td colspan="4" class="text-center text-muted py-4">暂无任务</td></tr>';
+  });
+}
+function selectTask(id) { selectedTask = id; loadComments(); }
+function loadComments() {
+  if (!selectedTask) return;
+  fetch(`/api/workflow/tasks/${selectedTask}/comments`).then(r=>r.json()).then(d => {
+    document.getElementById('commentBox').innerHTML = (d.comments||[]).map(c =>
+      `<div class="mb-2"><strong>${c.author_name}</strong> <span class="small text-muted">${c.created_at}</span><div>${c.content}</div></div>`).join('') ||
+      '<div class="text-muted small">暂无评论</div>';
+  });
+}
+function postComment() {
+  const content = document.getElementById('commentInput').value.trim();
+  if (!content || !selectedTask) return;
+  fetch(`/api/workflow/tasks/${selectedTask}/comments`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ content }) })
+    .then(r=>r.json()).then(d => { if(d.success){ document.getElementById('commentInput').value=''; loadComments(); showToast('已发送，@用户将收到提醒','info'); }});
+}
+function createTask() {
+  fetch('/api/workflow/tasks', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ title: document.getElementById('taskTitle').value, description: document.getElementById('taskDesc').value, due_date: document.getElementById('taskDue').value })
+  }).then(r=>r.json()).then(d => { if(d.success){ bootstrap.Modal.getInstance(document.getElementById('taskModal')).hide(); loadTasks(); }});
+}
+function doneTask(id) {
+  fetch(`/api/workflow/tasks/${id}/status`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ status:'done' }) })
+    .then(r=>r.json()).then(d => { if(d.success) loadTasks(); });
+}
+</script>
+{% endblock %}

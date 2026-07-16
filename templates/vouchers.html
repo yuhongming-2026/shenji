@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}凭证管理 - 智能财务系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <div>
+    <h4 class="mb-0"><i class="bi bi-journal-text"></i> 凭证管理</h4>
+    <small class="text-muted">录入记账凭证 · 借贷平衡校验 · 审核记账</small>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="/finance" class="btn btn-sm btn-outline-secondary"><i class="bi bi-bank2"></i> 财务总览</a>
+    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#voucherModal"><i class="bi bi-plus-lg"></i> 新建凭证</button>
+  </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" id="voucherTable">
+        <thead><tr><th>凭证号</th><th>日期</th><th>摘要</th><th class="text-end">借方</th><th class="text-end">贷方</th><th>状态</th><th></th></tr></thead>
+        <tbody><tr><td colspan="7" class="text-center py-4 text-muted">加载中…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="voucherModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">新建记账凭证</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="row g-2 mb-3">
+          <div class="col-md-4"><label class="form-label">日期</label><input type="date" class="form-control" id="vDate"></div>
+          <div class="col-md-8"><label class="form-label">摘要</label><input class="form-control" id="vSummary" placeholder="如：收到客户货款"></div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm" id="lineTable">
+            <thead><tr><th>科目编码</th><th>摘要</th><th>借方</th><th>贷方</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addLine()"><i class="bi bi-plus"></i> 添加分录</button>
+        <div class="small text-muted mt-2" id="balanceHint">借贷须平衡</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button class="btn btn-primary" onclick="saveVoucher(false)">保存草稿</button>
+        <button class="btn btn-success" onclick="saveVoucher(true)">保存并记账</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let accounts = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('vDate').value = new Date().toISOString().slice(0, 10);
+  fetch('/api/finance/accounts').then(r => r.json()).then(d => { if (d.success) accounts = d.accounts || []; });
+  loadVouchers();
+  addLine(); addLine();
+});
+
+function loadVouchers() {
+  fetch('/api/finance/vouchers').then(r => r.json()).then(d => {
+    const tb = document.querySelector('#voucherTable tbody');
+    if (!d.success) { tb.innerHTML = `<tr><td colspan="7">${d.error}</td></tr>`; return; }
+    const list = d.vouchers || [];
+    tb.innerHTML = list.length ? list.map(v => `<tr>
+      <td>${v.voucher_no}</td><td>${v.voucher_date}</td><td>${v.summary||''}</td>
+      <td class="text-end">${formatCurrency(v.total_debit)}</td>
+      <td class="text-end">${formatCurrency(v.total_credit)}</td>
+      <td><span class="badge ${v.status==='posted'?'bg-success':'bg-secondary'}">${v.status==='posted'?'已记账':'草稿'}</span></td>
+      <td>${v.status==='draft' ? `<button class="btn btn-sm btn-outline-success" onclick="postVoucher(${v.id})">记账</button>
+        <button class="btn btn-sm btn-outline-primary" onclick="submitApproval(${v.id})">提交审批</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="showVersions(${v.id},'${v.voucher_no}')">历史</button>` : 
+        `<button class="btn btn-sm btn-outline-secondary" onclick="showVersions(${v.id},'${v.voucher_no}')">历史</button>`}</td>
+    </tr>`).join('') : '<tr><td colspan="7" class="text-center text-muted py-4">暂无凭证</td></tr>';
+  });
+}
+
+function addLine() {
+  const tb = document.querySelector('#lineTable tbody');
+  const opts = accounts.map(a => `<option value="${a.code}">${a.code} ${a.name}</option>`).join('');
+  tb.insertAdjacentHTML('beforeend', `<tr>
+    <td><select class="form-select form-select-sm acct-sel">${opts}</select></td>
+    <td><input class="form-control form-control-sm ln-sum" placeholder="分录摘要"></td>
+    <td><input type="number" step="0.01" class="form-control form-control-sm ln-debit" value="0"></td>
+    <td><input type="number" step="0.01" class="form-control form-control-sm ln-credit" value="0"></td>
+    <td><button type="button" class="btn btn-sm btn-link text-danger" onclick="this.closest('tr').remove()">×</button></td>
+  </tr>`);
+}
+
+function collectLines() {
+  return [...document.querySelectorAll('#lineTable tbody tr')].map(tr => ({
+    account_code: tr.querySelector('.acct-sel')?.value,
+    summary: tr.querySelector('.ln-sum')?.value,
+    debit: parseFloat(tr.querySelector('.ln-debit')?.value || 0),
+    credit: parseFloat(tr.querySelector('.ln-credit')?.value || 0),
+  })).filter(l => l.account_code);
+}
+
+function saveVoucher(autoPost) {
+  const lines = collectLines();
+  const debit = lines.reduce((s, l) => s + l.debit, 0);
+  const credit = lines.reduce((s, l) => s + l.credit, 0);
+  if (Math.abs(debit - credit) > 0.01) { alert('借贷不平衡'); return; }
+  fetch('/api/finance/vouchers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      voucher_date: document.getElementById('vDate').value,
+      summary: document.getElementById('vSummary').value,
+      lines, auto_post: autoPost,
+    }),
+  }).then(r => r.json()).then(d => {
+    if (d.success) {
+      bootstrap.Modal.getInstance(document.getElementById('voucherModal'))?.hide();
+      showToast(autoPost ? '凭证已记账' : '凭证已保存', 'success');
+      loadVouchers();
+    } else alert(d.error);
+  });
+}
+
+function postVoucher(id) {
+  fetch(`/api/finance/vouchers/${id}/post`, { method: 'POST' })
+    .then(r => r.json())
+    .then(d => { if (d.success) { showToast('记账成功', 'success'); loadVouchers(); } else alert(d.error); });
+}
+
+function submitApproval(id) {
+  fetch(`/api/finance/vouchers/${id}/submit-approval`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' })
+    .then(r => r.json())
+    .then(d => { if (d.success) { showToast('已提交审批', 'success'); } else alert(d.error); });
+}
+
+function showVersions(id, no) {
+  fetch(`/api/finance/vouchers/${id}/versions`).then(r=>r.json()).then(d => {
+    const vers = d.versions || [];
+    const html = vers.length ? vers.map(v =>
+      `<div class="border-bottom py-2"><strong>v${v.version_no}</strong> · ${v.change_message||''}<br>
+      <span class="small text-muted">${v.author_name||''} · ${v.created_at}</span>
+      <button class="btn btn-link btn-sm" onclick="viewVersion(${id},${v.version_no})">查看快照</button></div>`).join('') :
+      '<div class="text-muted">暂无版本记录</div>';
+    const box = document.createElement('div');
+    box.innerHTML = `<div class="p-3"><h6>凭证 ${no} 版本历史</h6>${html}<button class="btn btn-sm btn-secondary mt-2" onclick="this.closest('.modal').remove()">关闭</button></div>`;
+    const modal = document.createElement('div');
+    modal.className = 'modal fade show d-block';
+    modal.style.background = 'rgba(0,0,0,.4)';
+    modal.innerHTML = `<div class="modal-dialog"><div class="modal-content">${box.innerHTML}</div></div>`;
+    document.body.appendChild(modal);
+    modal.onclick = e => { if (e.target === modal) modal.remove(); };
+  });
+}
+
+function viewVersion(vid, vno) {
+  fetch(`/api/finance/vouchers/${vid}/versions/${vno}`).then(r=>r.json()).then(d => {
+    if (!d.success) { alert(d.error); return; }
+    alert(JSON.stringify(d.version.snapshot, null, 2).slice(0, 2000));
+  });
+}
+</script>
+{% endblock %}

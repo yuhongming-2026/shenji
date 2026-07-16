@@ -1,0 +1,32 @@
+{
+  "name": "智能财务系统",
+  "short_name": "财务系统",
+  "description": "核算 · 审计 · 协作 · AI — 可安装到桌面，像 App 一样打开",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1a2332",
+  "theme_color": "#c45c26",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

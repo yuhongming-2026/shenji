@@ -1,0 +1,20 @@
+# 环境测试配置（与 docker-compose.yml 叠加使用）
+# 执行: docker compose -f docker-compose.yml -f docker-compose.test.yml up --build --abort-on-container-exit
+
+services:
+  audit-app:
+    ports:
+      - "5000:5000"
+
+  # 自动化冒烟测试：验证容器内环境与服务接口
+  smoke-test:
+    image: curlimages/curl:8.5.0
+    depends_on:
+      audit-app:
+        condition: service_healthy
+    volumes:
+      - ./示例财务数据.csv:/samples/demo.csv:ro
+      - ./scripts/docker-smoke-test.sh:/smoke-test.sh:ro
+    entrypoint: ["/bin/sh", "/smoke-test.sh"]
+    environment:
+      BASE_URL: "http://audit-app:5000"

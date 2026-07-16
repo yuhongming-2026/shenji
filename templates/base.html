@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}智能财务系统{% endblock %}</title>
+<link rel="icon" href="/favicon.ico" type="image/svg+xml">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#c45c26">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="财务系统">
+<meta name="application-name" content="智能财务系统">
+<link href="{{ url_for('static', filename='vendor/bootstrap/css/bootstrap.min.css') }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='vendor/datatables/css/dataTables.bootstrap5.min.css') }}" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ ui_build|default('13') }}">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta name="ui-build" content="{{ ui_build|default('13') }}">
+{% if user_accent %}
+<style>:root { --accent: {{ user_accent }}; --accent-hover: {{ user_accent }}; }</style>
+{% endif %}
+{% block extra_head %}{% endblock %}
+</head>
+<body class="app-body page-style-{{ user_page_style|default('classic') }}" data-theme="{{ user_theme|default('default') }}">
+<div class="app-shell">
+  {% if g.current_user and request.path not in ('/login',) %}
+  <aside class="app-sidebar" id="appSidebar">
+    <div class="sidebar-brand">
+      <span class="brand-mark">财</span>
+      <div class="brand-text">
+        <strong>智能财务系统</strong>
+        <small>{{ user_role_label|default('用户') }}{% if user_company %} · {{ user_company }}{% else %} · 核算·协作·AI{% endif %}</small>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      {% set uf = user_features|default({}) %}
+      {% if uf.get('finance') or uf.get('vouchers') or uf.get('receivables') or uf.get('payables') or uf.get('invoices') or uf.get('reconciliation') %}
+      <div class="nav-section-label">财务核算</div>
+      {% if uf.get('finance') %}<a class="nav-item" href="/finance" data-path="/finance"><i class="bi bi-bank2"></i><span>财务总览</span></a>{% endif %}
+      {% if uf.get('vouchers') %}<a class="nav-item" href="/finance/vouchers" data-path="/finance/vouchers"><i class="bi bi-journal-text"></i><span>凭证管理</span></a>{% endif %}
+      {% if uf.get('receivables') %}<a class="nav-item" href="/finance/receivables" data-path="/finance/receivables"><i class="bi bi-cash-coin"></i><span>应收账款</span></a>{% endif %}
+      {% if uf.get('payables') %}<a class="nav-item" href="/finance/payables" data-path="/finance/payables"><i class="bi bi-credit-card"></i><span>应付账款</span></a>{% endif %}
+      {% if uf.get('invoices') %}<a class="nav-item" href="/finance/invoices" data-path="/finance/invoices"><i class="bi bi-receipt"></i><span>发票管理</span></a>{% endif %}
+      {% if uf.get('reconciliation') %}<a class="nav-item" href="/finance/reconciliation" data-path="/finance/reconciliation"><i class="bi bi-bank"></i><span>银行对账</span></a>{% endif %}
+      {% endif %}
+      {% if uf.get('approvals') or uf.get('tasks') %}
+      <div class="nav-section-label">工作流</div>
+      {% if uf.get('approvals') %}<a class="nav-item" href="/workflow/approvals" data-path="/workflow/approvals"><i class="bi bi-check2-square"></i><span>审批中心</span></a>{% endif %}
+      {% if uf.get('tasks') %}<a class="nav-item" href="/workflow/tasks" data-path="/workflow/tasks"><i class="bi bi-list-task"></i><span>任务中心</span></a>{% endif %}
+      {% endif %}
+      {% if uf.get('upload') or uf.get('edit') or uf.get('preview') %}
+      <div class="nav-section-label">数据</div>
+      {% if uf.get('upload') %}<a class="nav-item" href="/" data-path="/"><i class="bi bi-file-arrow-up"></i><span>数据导入</span></a>{% endif %}
+      {% if uf.get('edit') %}<a class="nav-item" href="/edit" data-path="/edit"><i class="bi bi-pencil-square"></i><span>表格编辑</span></a>{% endif %}
+      {% if uf.get('preview') %}<a class="nav-item" href="/preview" data-path="/preview"><i class="bi bi-layout-text-window"></i><span>数据预览</span></a>{% endif %}
+      {% endif %}
+      {% if uf.get('dashboard') or uf.get('analysis') or uf.get('report') %}
+      <div class="nav-section-label">分析</div>
+      {% if uf.get('dashboard') %}<a class="nav-item" href="/dashboard" data-path="/dashboard"><i class="bi bi-bar-chart-line"></i><span>审计概览</span></a>{% endif %}
+      {% if uf.get('analysis') %}<a class="nav-item" href="/analysis" data-path="/analysis"><i class="bi bi-clipboard2-check"></i><span>规则检测</span></a>{% endif %}
+      {% if uf.get('report') %}<a class="nav-item" href="/report" data-path="/report"><i class="bi bi-file-text"></i><span>审计报告</span></a>{% endif %}
+      {% endif %}
+      {% if uf.get('history') or uf.get('chat') %}
+      <div class="nav-section-label">协作</div>
+      {% if uf.get('history') %}<a class="nav-item" href="/history" data-path="/history"><i class="bi bi-archive"></i><span>历史记录</span></a>{% endif %}
+      {% if uf.get('chat') %}<a class="nav-item position-relative" href="/chat" data-path="/chat">
+        <i class="bi bi-chat-left-text"></i><span>消息</span>
+        <span id="unreadBadge" class="nav-badge" style="display:none">0</span>
+      </a>{% endif %}
+      {% endif %}
+      {% if uf.get('agent') %}
+      <div class="nav-section-label">智能体</div>
+      <a class="nav-item" href="/agent" data-path="/agent"><i class="bi bi-cpu"></i><span>AI Agent</span></a>
+      <a class="nav-item" href="/models" data-path="/models"><i class="bi bi-gear"></i><span>模型管理</span></a>
+      <a class="nav-item" href="/agent/develop" data-path="/agent/develop"><i class="bi bi-code-slash"></i><span>Agent 开发</span></a>
+      {% endif %}
+      <a class="nav-item" href="/profile" data-path="/profile"><i class="bi bi-person"></i><span>个人空间</span></a>
+      <button type="button" class="nav-item" data-pwa-install onclick="installFinanceApp()" style="width:100%;text-align:left;border:0;background:transparent;display:none" title="安装到桌面，像 App 一样打开">
+        <i class="bi bi-download"></i><span>安装到桌面</span>
+      </button>
+    </nav>
+    <div class="sidebar-user">
+      <div class="sidebar-user-info">
+        <span class="user-avatar">{{ g.current_user.username[0]|upper }}</span>
+        <div>
+          <strong>{{ g.current_user.username }}</strong>
+          <small class="d-block text-muted" style="font-size:10px">{{ user_role_label|default('') }}{% if user_company %} · {{ user_company }}{% endif %}</small>
+          <a href="/logout" class="logout-link">退出登录</a>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar-foot"><span>v2.2 · build {{ ui_build|default('13') }}</span></div>
+  </aside>
+  {% endif %}
+
+  <div class="app-main{% if not g.current_user or request.path == '/login' %} app-main-full{% endif %}">
+    {% if g.current_user and request.path not in ('/login',) %}
+    <header class="app-topbar">
+      <button class="btn btn-ghost d-lg-none" type="button" id="sidebarToggle" aria-label="切换菜单"><i class="bi bi-list"></i></button>
+      {% if user_features.get('search') %}
+      <form class="topbar-search" id="webSearchForm" action="/search" method="get">
+        <i class="bi bi-search"></i>
+        <input type="text" name="q" id="webSearchInput" placeholder="全文检索" autocomplete="off" required>
+      </form>
+      {% endif %}
+      <div class="topbar-actions ms-auto">
+        <div class="notify-wrap">
+          <button type="button" class="btn btn-ghost notify-bell" id="notifyBell" title="消息提醒">
+            <i class="bi bi-bell"></i>
+            <span id="notifyBadge" class="nav-badge" style="display:none">0</span>
+          </button>
+          <div class="notify-panel" id="notifyPanel">
+            <div class="notify-panel-head">
+              <span>消息提醒</span>
+              <button type="button" class="btn btn-sm btn-link" id="notifyMarkRead">全部已读</button>
+            </div>
+            <div id="notifyList" class="notify-list"></div>
+          </div>
+        </div>
+      </div>
+    </header>
+    {% endif %}
+
+    <main class="app-content">
+      {% block page_header %}{% endblock %}
+      {% block content %}{% endblock %}
+    </main>
+
+    {% if g.current_user and request.path not in ('/login',) %}
+    <footer class="app-footer"><span>仅供内部审计参考，不构成正式审计意见</span></footer>
+    {% endif %}
+  </div>
+</div>
+
+{% if g.current_user and request.path not in ('/login',) %}
+<div class="sidebar-backdrop d-lg-none" id="sidebarBackdrop"></div>
+
+{% if user_features.get('ai') %}
+<div id="aiFloatingBtn" class="ai-floating-btn" title="AI 智能助手 - 可拖拽，点击打开对话">
+  <i class="bi bi-robot"></i>
+</div>
+<div id="aiChatWindow" class="ai-chat-window" style="display:none">
+  <div class="ai-chat-header" id="aiChatHeader">
+    <span><i class="bi bi-robot"></i> AI 智能助手</span>
+    <div class="ai-chat-actions">
+      <button type="button" onclick="clearAiChat()" title="清空"><i class="bi bi-arrow-counterclockwise"></i></button>
+      <button type="button" onclick="toggleAiWindow()" title="最小化"><i class="bi bi-dash"></i></button>
+      <button type="button" onclick="closeAiWindow()" title="关闭"><i class="bi bi-x"></i></button>
+    </div>
+  </div>
+  <div class="ai-chat-body" id="aiChatBody">
+    <div class="ai-message ai-bot"><div class="ai-bubble">你好！我是财务智能 Agent，可以查账、做审计、跳转页面帮你完成工作。试试说「打开凭证管理」或「查看财务总览」。</div></div>
+  </div>
+  <div class="ai-chat-footer">
+    <div class="input-group input-group-sm">
+      <input type="text" id="aiChatInput" class="form-control" placeholder="输入问题…" onkeypress="if(event.key==='Enter')sendAiMessage()">
+      <button class="btn btn-primary" type="button" onclick="sendAiMessage()"><i class="bi bi-send"></i></button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div id="feedbackFloatingBtn" class="feedback-floating-btn fab-stack-1" title="意见反馈">
+  <i class="bi bi-chat-heart"></i>
+</div>
+<div id="feedbackWindow" class="feedback-window" style="display:none">
+  <div class="feedback-header">
+    <span>意见反馈</span>
+    <button type="button" id="feedbackClose"><i class="bi bi-x"></i></button>
+  </div>
+  <div class="feedback-body">
+    <label class="form-label small">满意度</label>
+    <div class="feedback-rating mb-2">
+      {% for i in range(1, 6) %}
+      <label><input type="radio" name="feedbackRating" value="{{ i }}" {% if i==5 %}checked{% endif %}> {{ i }}</label>
+      {% endfor %}
+    </div>
+    <textarea id="feedbackMessage" class="form-control" rows="4" placeholder="描述问题或建议…"></textarea>
+    <button type="button" class="btn btn-primary btn-sm mt-2 w-100" id="feedbackSubmit">提交反馈</button>
+  </div>
+</div>
+
+{% if user_features.get('video') %}
+<div id="videoCallOverlay" class="video-call-overlay" style="display:none">
+  <div class="video-call-box">
+    <div class="video-call-header">
+      <span id="callStatus">连接中…</span>
+      <button type="button" class="btn btn-sm btn-danger" onclick="endVideoCall()">挂断</button>
+    </div>
+    <div class="video-call-stage">
+      <video id="remoteVideo" autoplay playsinline></video>
+      <video id="localVideo" autoplay playsinline muted class="video-local"></video>
+    </div>
+  </div>
+</div>
+<script>window.__enableVideoCall = true; window.__currentUserId = {{ g.current_user.id }};</script>
+<script src="{{ url_for('static', filename='js/webrtc-call.js') }}?v={{ ui_build|default('13') }}"></script>
+{% else %}
+<script>window.__enableVideoCall = false; window.__currentUserId = {{ g.current_user.id }};</script>
+{% endif %}
+{% endif %}
+
+<script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/chartjs/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/jquery/jquery.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/datatables/js/jquery.dataTables.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/datatables/js/dataTables.bootstrap5.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/agent_actions.js') }}?v={{ ui_build|default('13') }}"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}?v={{ ui_build|default('13') }}"></script>
+<script src="{{ url_for('static', filename='js/features.js') }}?v={{ ui_build|default('13') }}"></script>
+<script src="{{ url_for('static', filename='js/pwa.js') }}?v={{ ui_build|default('13') }}"></script>
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

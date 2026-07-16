@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Agent 扩展开发工作室{% endblock %}
+
+{% block extra_head %}
+<style>
+.dev-studio { display:grid; grid-template-columns:240px 1fr 320px; gap:14px; min-height:calc(100vh - 200px); }
+@media (max-width:1100px) { .dev-studio { grid-template-columns:1fr; } .dev-test-panel { display:none; } }
+.dev-panel { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; }
+.dev-panel-head { padding:10px 14px; border-bottom:1px solid var(--border); font-weight:600; font-size:14px; }
+.dev-panel-body { padding:12px; overflow:auto; flex:1; }
+.dev-file-item { padding:8px 10px; border-radius:8px; cursor:pointer; margin-bottom:4px; font-size:13px; border:1px solid transparent; }
+.dev-file-item:hover, .dev-file-item.active { background:var(--surface-2); border-color:var(--accent); }
+.dev-editor { width:100%; min-height:420px; font-family:Consolas,Monaco,monospace; font-size:13px; border:1px solid var(--border); border-radius:8px; padding:12px; resize:vertical; background:var(--paper); color:var(--ink); }
+.dev-tabs .btn { font-size:12px; }
+.dev-test-out { background:var(--surface-2); border-radius:8px; padding:10px; font-family:monospace; font-size:12px; max-height:280px; overflow:auto; white-space:pre-wrap; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-code-slash"></i> Agent 扩展开发工作室</h1>
+    <p class="page-desc">在线创建 Skill · MCP · 工作流 · Agent · 小程序，保存即生效</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="/agent" class="btn btn-outline-secondary btn-sm"><i class="bi bi-robot"></i> Agent 工作台</a>
+    <button type="button" class="btn btn-primary btn-sm" onclick="reloadAllExtensions()"><i class="bi bi-arrow-clockwise"></i> 重新扫描</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="dev-tabs btn-group mb-3 flex-wrap" role="group">
+  <button type="button" class="btn btn-outline-primary active" data-type="skill" onclick="switchDevType('skill',this)">Skill</button>
+  <button type="button" class="btn btn-outline-primary" data-type="mcp" onclick="switchDevType('mcp',this)">MCP</button>
+  <button type="button" class="btn btn-outline-primary" data-type="workflow" onclick="switchDevType('workflow',this)">工作流</button>
+  <button type="button" class="btn btn-outline-primary" data-type="agent" onclick="switchDevType('agent',this)">Agent</button>
+  <button type="button" class="btn btn-outline-primary" data-type="miniprogram" onclick="switchDevType('miniprogram',this)">小程序</button>
+</div>
+
+<div class="dev-studio">
+  <div class="dev-panel">
+    <div class="dev-panel-head d-flex justify-content-between align-items-center">
+      <span id="fileListTitle">Skill 列表</span>
+      <button type="button" class="btn btn-sm btn-success" onclick="showScaffoldModal()" title="新建"><i class="bi bi-plus-lg"></i></button>
+    </div>
+    <div class="dev-panel-body" id="devFileList"><div class="text-muted small">加载中…</div></div>
+  </div>
+
+  <div class="dev-panel">
+    <div class="dev-panel-head d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span id="editorTitle">选择或新建扩展</span>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="loadCurrentFile()" id="btnReloadFile" disabled><i class="bi bi-arrow-counterclockwise"></i></button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="saveCurrentFile()" id="btnSaveFile" disabled><i class="bi bi-save"></i> 保存</button>
+      </div>
+    </div>
+    <div class="dev-panel-body">
+      <textarea id="devEditor" class="dev-editor" placeholder="在此编辑 JSON / YAML / Python…" spellcheck="false"></textarea>
+      <div class="mt-2 small text-muted" id="editorPath"></div>
+    </div>
+  </div>
+
+  <div class="dev-panel dev-test-panel">
+    <div class="dev-panel-head"><i class="bi bi-play-circle"></i> 测试与说明</div>
+    <div class="dev-panel-body">
+      <div id="skillTestArea" style="display:none">
+        <label class="form-label small">Skill 测试参数 (JSON)</label>
+        <textarea id="skillTestArgs" class="form-control form-control-sm mb-2" rows="3">{}</textarea>
+        <button type="button" class="btn btn-sm btn-outline-primary w-100 mb-3" onclick="testCurrentSkill()"><i class="bi bi-play-fill"></i> 运行 Skill</button>
+      </div>
+      <label class="form-label small">输出</label>
+      <div class="dev-test-out" id="devTestOutput">选择 Skill 后可在此测试运行结果</div>
+      <hr>
+      <div class="small text-muted">
+        <p class="mb-1"><strong>目录结构</strong></p>
+        <code>extensions/skills/名称/skill.json + handler.py</code><br>
+        <code>extensions/mcp/*.json</code><br>
+        <code>extensions/workflows/*.yaml</code><br>
+        <code>extensions/agents/*.json</code>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="scaffoldModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="scaffoldModalTitle">新建扩展</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2">
+          <label class="form-label small">ID（英文/数字/下划线）</label>
+          <input type="text" id="scaffoldId" class="form-control" placeholder="my_skill">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small">名称</label>
+          <input type="text" id="scaffoldName" class="form-control" placeholder="我的技能">
+        </div>
+        <div class="mb-2" id="scaffoldDescWrap">
+          <label class="form-label small">描述</label>
+          <input type="text" id="scaffoldDesc" class="form-control" placeholder="技能说明">
+        </div>
+        <div class="mb-2" id="scaffoldUrlWrap" style="display:none">
+          <label class="form-label small">MCP URL</label>
+          <input type="text" id="scaffoldUrl" class="form-control" placeholder="http://localhost:3001/mcp">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" onclick="createScaffold()">创建</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/agent_develop.js') }}?v=2"></script>
+{% endblock %}

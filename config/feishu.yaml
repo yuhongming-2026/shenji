@@ -1,0 +1,30 @@
+# 飞书机器人配置模板
+# 复制此文件或通过 Agent 开发工作室配置
+
+# 飞书应用凭证（从飞书开放平台获取）
+app_id: ""
+app_secret: ""
+
+# 事件订阅（可选，用于接收用户消息）
+verification_token: ""
+encrypt_key: ""
+
+# 机器人信息
+bot_name: "审计助手"
+bot_description: "财务大数据审计助手，支持数据上传、审计分析、报告生成"
+
+# Web 系统地址（用于生成卡片跳转链接）
+web_url: "http://localhost:5000"
+
+# 功能开关
+features:
+  auto_reply: true          # 自动回复用户消息
+  audit_notify: true        # 审计完成后通知
+  collab_invite: true       # 支持发送协同编辑邀请
+  daily_report: false       # 每日定时推送审计简报
+
+# 通知模板
+notifications:
+  audit_complete: "📊 审计分析已完成\n风险等级：{risk_level}\n异常发现：{findings} 项\n[查看详情]({report_url})"
+  collab_invite: "👥 {user} 邀请你协同编辑表格「{title}」\n[点击加入]({collab_url})"
+  daily_brief: "📋 {date} 审计日报\n昨日处理：{processed} 条\n异常发现：{findings} 项\n风险趋势：{trend}"

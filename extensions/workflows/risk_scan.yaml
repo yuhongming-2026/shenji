@@ -1,0 +1,33 @@
+# 风险全面扫描 — 三阶段审计一键执行
+id: risk_scan
+name: 风险全面扫描
+description: 自动执行风险评估、控制测试、实质性程序三阶段审计
+version: "1.0"
+steps:
+  - type: agent
+    name: 风险评估
+    prompt: |
+      执行第一阶段审计：风险评估。
+      分析当前已加载数据的财务比率、收入趋势和集中度风险。
+      列出主要风险发现和建议。
+    max_steps: 3
+    required: false
+
+  - type: agent
+    name: 控制测试
+    prompt: |
+      执行第二阶段审计：控制测试。
+      基于上一步风险评估结果，对IT控制和业务流程控制进行测试。
+      识别控制薄弱环节。
+      上一步结果: {{prev}}
+    max_steps: 3
+    required: false
+
+  - type: agent
+    name: 实质性程序
+    prompt: |
+      执行第三阶段审计：实质性程序。
+      根据前两步的发现，对高风险领域执行详细测试和分析性复核。
+      给出综合审计结论和建议。
+      上一步结果: {{prev}}
+    max_steps: 5

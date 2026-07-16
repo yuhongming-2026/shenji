@@ -1,0 +1,26 @@
+# 审计周报 — 自动生成周报摘要
+id: weekly_audit_report
+name: 审计周报生成
+description: 自动分析当前数据并生成周报摘要（Markdown 格式）
+version: "1.0"
+steps:
+  - type: agent
+    name: 数据汇总
+    prompt: |
+      获取当前审计数据的完整摘要。使用 get_audit_context 和 get_table_summary。
+    max_steps: 2
+
+  - type: agent
+    name: 生成周报
+    prompt: |
+      根据以下审计数据摘要，生成一份专业的审计周报（Markdown 格式）：
+
+      {prev}
+
+      周报需包含：
+      1. 📊 数据概览（总交易数、总金额、日期范围）
+      2. ⚠️ 风险发现（高风险项列表）
+      3. 📈 风险趋势评估
+      4. 💡 改进建议
+      5. 📋 待办事项
+    max_steps: 3

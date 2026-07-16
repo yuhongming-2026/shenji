@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}飞书 Bot 设置{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-wechat"></i> 飞书 Bot 设置</h1>
+    <p class="page-desc">配置飞书机器人，让客户和同事通过飞书与审计助手对话</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-8 mx-auto">
+    <div class="card">
+      <div class="card-header"><strong><i class="bi bi-gear"></i> 飞书应用配置</strong></div>
+      <div class="card-body">
+        <div class="alert alert-info small">
+          <strong>使用步骤：</strong><br>
+          1. 前往 <a href="https://open.feishu.cn" target="_blank">飞书开放平台</a> 创建「企业自建应用」<br>
+          2. 获取 App ID 和 App Secret 填入下方<br>
+          3. 在「事件订阅」中配置请求地址为下方的 Webhook URL<br>
+          4. 订阅 <code>im.message.receive_v1</code> 事件<br>
+          5. 发布应用并添加到飞书工作台
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">App ID</label>
+          <input type="text" id="fsAppId" class="form-control" placeholder="cli_xxxxxxxxxxxxxxxx">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">App Secret</label>
+          <input type="password" id="fsAppSecret" class="form-control" placeholder="飞书应用密钥">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">机器人名称</label>
+          <input type="text" id="fsBotName" class="form-control" value="审计助手" placeholder="审计助手">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Webhook 回调地址（复制到飞书开放平台）</label>
+          <div class="input-group">
+            <input type="text" readonly class="form-control" id="fsWebhookUrl" value="">
+            <button class="btn btn-outline-primary" onclick="copyWebhook()"><i class="bi bi-clipboard"></i> 复制</button>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-primary" onclick="saveFeishuConfig()">
+            <i class="bi bi-check-lg"></i> 保存配置
+          </button>
+          <button type="button" class="btn btn-outline-secondary" onclick="testFeishu()">
+            <i class="bi bi-send"></i> 测试连接
+          </button>
+        </div>
+        <div id="feishuResult" class="mt-3"></div>
+      </div>
+    </div>
+
+    <div class="card mt-3">
+      <div class="card-header"><strong><i class="bi bi-chat-dots"></i> 对话示例</strong></div>
+      <div class="card-body">
+        <p class="small text-muted">配置成功后，用户在飞书中与机器人对话的效果：</p>
+        <div class="border rounded p-3 bg-light">
+          <div class="mb-2"><strong>👤 用户：</strong>帮我分析一下最近的财务数据</div>
+          <div class="mb-2"><strong>🤖 审计助手：</strong>收到！正在为你分析当前数据…<br>📊 共检测到 1,250 条交易记录<br>⚠️ 发现 3 项高风险异常<br>📋 建议查看审计报告获取详情</div>
+          <div><strong>👤 用户：</strong>导出 Excel 报告</div>
+          <div><strong>🤖 审计助手：</strong>已生成审计报告，请访问 <a href="#">http://your-server/report</a> 下载</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('fsWebhookUrl').value = window.location.origin + '/api/feishu/webhook';
+  loadCurrentConfig();
+});
+
+function loadCurrentConfig() {
+  fetch('/api/feishu/config')
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success || !d.config) return;
+      const cfg = d.config;
+      document.getElementById('fsAppId').value = cfg.app_id || '';
+      document.getElementById('fsBotName').value = cfg.bot_name || '审计助手';
+    }).catch(() => {});
+}
+
+function copyWebhook() {
+  const el = document.getElementById('fsWebhookUrl');
+  el.select();
+  document.execCommand('copy');
+  showToast('已复制 Webhook URL', 'success');
+}
+
+function saveFeishuConfig() {
+  const data = {
+    app_id: document.getElementById('fsAppId').value.trim(),
+    app_secret: document.getElementById('fsAppSecret').value.trim(),
+    bot_name: document.getElementById('fsBotName').value.trim(),
+    web_url: window.location.origin,
+  };
+  fetch('/api/feishu/config', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data),
+  }).then(r => r.json())
+    .then(d => {
+      const el = document.getElementById('feishuResult');
+      if (d.success) {
+        el.innerHTML = '<div class="alert alert-success">✅ 飞书配置已保存！</div>';
+      } else {
+        el.innerHTML = '<div class="alert alert-danger">❌ 保存失败</div>';
+      }
+    });
+}
+
+function testFeishu() {
+  const el = document.getElementById('feishuResult');
+  el.innerHTML = '<div class="alert alert-info">🔄 测试中…</div>';
+  fetch('/api/feishu/status')
+    .then(r => r.json())
+    .then(d => {
+      if (d.configured) {
+        el.innerHTML += '<div class="alert alert-success">✅ 飞书已正确配置，应用ID: ' + (d.app_id || '') + '</div>';
+      } else {
+        el.innerHTML += '<div class="alert alert-warning">⚠️ 请先填写 App ID 和 App Secret 并保存</div>';
+      }
+    });
+}
+
+function showToast(msg, type) {
+  const el = document.getElementById('feishuResult');
+  el.innerHTML = `<div class="alert alert-${type === 'success' ? 'success' : 'info'}">${msg}</div>`;
+}
+</script>
+{% endblock %}

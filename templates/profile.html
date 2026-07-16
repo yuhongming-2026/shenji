@@ -1,0 +1,348 @@
+{% extends "base.html" %}
+{% block title %}个人空间 - 财务审计工作台{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <div>
+    <h1>个人空间</h1>
+    <p class="page-desc">用户信息、好友管理与审计数据统计</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-4">
+    <div class="panel mb-4">
+      <div class="panel-header"><i class="bi bi-person"></i> 用户信息</div>
+      <div class="panel-body text-center">
+        <div class="mb-3">
+          <span class="user-avatar" style="width:56px;height:56px;font-size:22px" id="profileAvatar">{{ g.current_user.username[0]|upper }}</span>
+        </div>
+        <h5 id="profileUsername">{{ g.current_user.username }}</h5>
+        <p class="text-muted small">注册时间: <span id="profileCreatedAt">--</span></p>
+        <div class="text-start mt-3">
+          <label class="form-label small mb-1">公司</label>
+          <div class="input-group input-group-sm">
+            <input type="text" class="form-control" id="profileCompany" placeholder="填写公司后同公司自动好友" maxlength="80" value="{{ user_company|default('') }}">
+            <button type="button" class="btn btn-outline-primary" id="btnSaveCompany">保存</button>
+          </div>
+          <div class="form-text small">职业用户补填公司后，同公司同事会自动成为好友并可直接聊天。</div>
+        </div>
+        <hr>
+        <div class="row text-center">
+          <div class="col-4">
+            <h5 class="mb-0" id="statHistory">0</h5>
+            <small class="text-muted">审计记录</small>
+          </div>
+          <div class="col-4">
+            <h5 class="mb-0" id="statFriends">0</h5>
+            <small class="text-muted">好友</small>
+          </div>
+          <div class="col-4">
+            <h5 class="mb-0" id="statMessages">0</h5>
+            <small class="text-muted">消息</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 好友列表 -->
+    <div class="card mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-people"></i> 我的好友</span>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#searchUserModal"><i class="bi bi-search"></i> 添加好友</button>
+      </div>
+      <div class="card-body p-0" id="friendList" style="max-height:300px;overflow-y:auto">
+        <div class="text-center text-muted py-3">加载中...</div>
+      </div>
+    </div>
+
+    <!-- 好友申请 -->
+    <div class="card mb-4" id="friendRequestsCard" style="display:none">
+      <div class="card-header"><i class="bi bi-bell"></i> 好友申请 <span class="badge bg-danger" id="requestCount">0</span></div>
+      <div class="card-body p-0" id="friendRequestsList" style="max-height:200px;overflow-y:auto"></div>
+    </div>
+  </div>
+
+  <!-- 右侧：数据信息 -->
+  <div class="col-lg-8">
+    <div class="card mb-4">
+      <div class="card-header"><i class="bi bi-bar-chart-steps"></i> 数据统计</div>
+      <div class="card-body">
+        <div class="row mb-3" id="dataStats"></div>
+        <h6><i class="bi bi-clock-history"></i> 最近审计记录</h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover" id="recentRecordsTable">
+            <thead><tr><th>标题</th><th>来源</th><th>行数</th><th>风险评分</th><th>时间</th></tr></thead>
+            <tbody id="recentRecordsBody"><tr><td colspan="5" class="text-center text-muted">加载中...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 共享文件 -->
+    <div class="card mb-4">
+      <div class="card-header"><i class="bi bi-folder-symlink"></i> 共享文件</div>
+      <div class="card-body p-0">
+        <ul class="nav nav-tabs px-3 pt-2" id="fileTabs">
+          <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabReceived"><i class="bi bi-inbox"></i> 收到的文件</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSent"><i class="bi bi-send"></i> 发出的文件</button></li>
+        </ul>
+        <div class="tab-content p-3">
+          <div class="tab-pane fade show active" id="tabReceived">
+            <div id="receivedFilesList"><div class="text-muted text-center py-2">加载中...</div></div>
+          </div>
+          <div class="tab-pane fade" id="tabSent">
+            <div id="sentFilesList"><div class="text-muted text-center py-2">加载中...</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 搜索用户模态框 -->
+<div class="modal fade" id="searchUserModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-search"></i> 搜索用户</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="input-group mb-3">
+          <input type="text" id="userSearchInput" class="form-control" placeholder="输入用户名搜索..." onkeypress="if(event.key==='Enter')searchUsers()">
+          <button class="btn btn-primary" onclick="searchUsers()"><i class="bi bi-search"></i> 搜索</button>
+        </div>
+        <div id="userSearchResults"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  loadProfile();
+  loadFriends();
+  loadFriendRequests();
+  loadDataStats();
+  checkUnreadMessages();
+});
+
+function loadProfile() {
+  fetch('/api/profile')
+    .then(r => r.json()).then(d => {
+      if (d.success) {
+        document.getElementById('profileCreatedAt').textContent = d.user.created_at || '--';
+        document.getElementById('statHistory').textContent = d.stats.history_count || 0;
+        document.getElementById('statFriends').textContent = d.stats.friends_count || 0;
+        document.getElementById('statMessages').textContent = d.stats.messages_count || 0;
+        const companyInput = document.getElementById('profileCompany');
+        if (companyInput && d.user.company) companyInput.value = d.user.company;
+      }
+    });
+}
+
+document.getElementById('btnSaveCompany')?.addEventListener('click', () => {
+  const company = (document.getElementById('profileCompany')?.value || '').trim();
+  if (!company) { showToast('请填写公司名称', 'warning'); return; }
+  fetch('/api/profile/company', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ company }),
+  }).then(r => r.json()).then(d => {
+    if (d.success) {
+      showToast(d.auto_friends ? `已保存，并关联 ${d.auto_friends} 位同公司同事` : '公司已保存', 'success');
+      loadFriends();
+    } else showToast(d.error || '保存失败', 'error');
+  });
+});
+
+function loadFriends() {
+  fetch('/api/friends')
+    .then(r => r.json()).then(d => {
+      const el = document.getElementById('friendList');
+      if (!d.success || !d.friends.length) {
+        el.innerHTML = '<div class="text-center text-muted py-3">暂无好友，快去添加吧！</div>';
+        return;
+      }
+      el.innerHTML = d.friends.map(f => {
+        const fid = f.other_id;
+        return `
+        <div class="d-flex align-items-center p-2 border-bottom">
+          <i class="bi bi-person-circle me-2" style="font-size:1.5rem;color:#3b82f6"></i>
+          <span class="flex-grow-1">${f.username}</span>
+          <a href="/chat?user=${f.username}&id=${fid}" class="btn btn-outline-primary btn-sm me-1" title="发消息"><i class="bi bi-chat"></i></a>
+          <button class="btn btn-outline-danger btn-sm" onclick="removeFriend(${fid})" title="删除好友"><i class="bi bi-person-x"></i></button>
+        </div>
+      `}).join('');
+      document.getElementById('statFriends').textContent = d.friends.length;
+    });
+}
+
+function loadFriendRequests() {
+  fetch('/api/friends/requests')
+    .then(r => r.json()).then(d => {
+      if (!d.success || !d.requests.length) {
+        document.getElementById('friendRequestsCard').style.display = 'none';
+        return;
+      }
+      document.getElementById('friendRequestsCard').style.display = 'block';
+      document.getElementById('requestCount').textContent = d.requests.length;
+      document.getElementById('friendRequestsList').innerHTML = d.requests.map(r => `
+        <div class="d-flex align-items-center p-2 border-bottom">
+          <i class="bi bi-person-circle me-2" style="font-size:1.5rem"></i>
+          <span class="flex-grow-1">${r.username}</span>
+          <small class="text-muted me-2">${r.created_at}</small>
+          <button class="btn btn-success btn-sm me-1" onclick="handleRequest(${r.id},'accept')"><i class="bi bi-check"></i></button>
+          <button class="btn btn-outline-danger btn-sm" onclick="handleRequest(${r.id},'reject')"><i class="bi bi-x"></i></button>
+        </div>
+      `).join('');
+    });
+}
+
+function handleRequest(requestId, action) {
+  fetch(`/api/friends/requests/${requestId}/${action}`, {method:'POST'})
+    .then(r => r.json()).then(d => {
+      if (d.success) { loadFriends(); loadFriendRequests(); showToast(d.message, 'success'); }
+      else showToast(d.error, 'error');
+    });
+}
+
+function searchUsers() {
+  const q = document.getElementById('userSearchInput').value.trim();
+  if (!q) return;
+  fetch(`/api/users/search?q=${encodeURIComponent(q)}`)
+    .then(r => r.json()).then(d => {
+      const el = document.getElementById('userSearchResults');
+      if (!d.success || !d.users.length) {
+        el.innerHTML = '<div class="text-muted text-center py-2">未找到用户</div>';
+        return;
+      }
+      el.innerHTML = d.users.map(u => `
+        <div class="d-flex align-items-center p-2 border-bottom">
+          <i class="bi bi-person-circle me-2" style="font-size:1.5rem;color:#3b82f6"></i>
+          <span class="flex-grow-1">${u.username}</span>
+          <small class="text-muted me-2">${u.created_at || ''}</small>
+          <a href="/chat?user=${encodeURIComponent(u.username)}&id=${u.id}" class="btn btn-outline-primary btn-sm me-1" title="发消息"><i class="bi bi-chat"></i></a>
+          <button class="btn btn-primary btn-sm" onclick="addFriend(${u.id})"><i class="bi bi-person-plus"></i> 添加</button>
+        </div>
+      `).join('');
+    });
+}
+
+function addFriend(friendId) {
+  fetch('/api/friends/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({friend_id:friendId})})
+    .then(r => r.json()).then(d => {
+      showToast(d.message || d.error, d.success ? 'success' : 'error');
+      if (d.success) { loadFriends(); loadFriendRequests(); }
+    });
+}
+
+function removeFriend(friendId) {
+  if (!confirm('确定删除该好友？')) return;
+  fetch('/api/friends/remove', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({friend_id:friendId})})
+    .then(r => r.json()).then(d => {
+      showToast(d.message, d.success ? 'success' : 'error');
+      if (d.success) loadFriends();
+    });
+}
+
+function loadDataStats() {
+  fetch('/api/profile/stats')
+    .then(r => r.json()).then(d => {
+      if (d.success) {
+        document.getElementById('dataStats').innerHTML = `
+          <div class="col-md-3 col-sm-6 mb-2"><div class="card bg-primary text-white"><div class="card-body text-center p-2"><h4>${d.total_records||0}</h4><small>总审计记录</small></div></div></div>
+          <div class="col-md-3 col-sm-6 mb-2"><div class="card bg-info text-white"><div class="card-body text-center p-2"><h4>${d.total_rows||0}</h4><small>总数据行</small></div></div></div>
+          <div class="col-md-3 col-sm-6 mb-2"><div class="card bg-success text-white"><div class="card-body text-center p-2"><h4>${d.total_findings||0}</h4><small>审计发现</small></div></div></div>
+          <div class="col-md-3 col-sm-6 mb-2"><div class="card bg-warning text-white"><div class="card-body text-center p-2"><h4>${d.avg_score||0}%</h4><small>平均风险评分</small></div></div></div>`;
+      }
+      if (d.records && d.records.length) {
+        document.getElementById('recentRecordsBody').innerHTML = d.records.map(r => {
+          const labelMap = {'high':'高风险','medium':'中风险','low':'低风险'};
+          const label = (r.score && r.score.overall_label) ? (labelMap[r.score.overall_label]||r.score.overall_label) : '--';
+          return `<tr>
+            <td><a href="/history">${r.title||'--'}</a></td>
+            <td><span class="badge bg-secondary">${r.source_type||'--'}</span></td>
+            <td>${r.row_count||0}</td>
+            <td><span class="risk-badge-${r.score?.overall_risk||'low'}">${label}</span></td>
+            <td><small>${r.created_at||'--'}</small></td>
+          </tr>`;
+        }).join('');
+      }
+    });
+}
+
+function loadSharedFiles() {
+  // 收到的文件
+  fetch('/api/files/received')
+    .then(r => r.json()).then(d => {
+      const el = document.getElementById('receivedFilesList');
+      if (!d.success || !d.files.length) {
+        el.innerHTML = '<div class="text-muted text-center py-2">暂无收到的文件</div>';
+        return;
+      }
+      el.innerHTML = d.files.map(f => `
+        <div class="d-flex align-items-center py-2 border-bottom">
+          <i class="bi ${getFileIcon(f.file_type)} fs-5 me-3"></i>
+          <div class="flex-grow-1">
+            <strong>${f.original_name}</strong>
+            <br><small class="text-muted">来自 ${f.sender_name} · ${formatFileSize(f.file_size)} · ${f.created_at||''}</small>
+          </div>
+          <a href="/api/files/${f.id}/download" class="btn btn-outline-primary btn-sm"><i class="bi bi-download"></i> 下载</a>
+        </div>
+      `).join('');
+    });
+
+  // 发出的文件
+  fetch('/api/files/sent')
+    .then(r => r.json()).then(d => {
+      const el = document.getElementById('sentFilesList');
+      if (!d.success || !d.files.length) {
+        el.innerHTML = '<div class="text-muted text-center py-2">暂无发出的文件</div>';
+        return;
+      }
+      el.innerHTML = d.files.map(f => `
+        <div class="d-flex align-items-center py-2 border-bottom">
+          <i class="bi ${getFileIcon(f.file_type)} fs-5 me-3"></i>
+          <div class="flex-grow-1">
+            <strong>${f.original_name}</strong>
+            <br><small class="text-muted">发给 ${f.receiver_name} · ${formatFileSize(f.file_size)} · ${f.created_at||''}</small>
+          </div>
+          <a href="/api/files/${f.id}/download" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download"></i></a>
+        </div>
+      `).join('');
+    });
+}
+
+function getFileIcon(ext) {
+  const map = {pdf:'bi-file-pdf', xlsx:'bi-file-excel', xls:'bi-file-excel', csv:'bi-file-text', docx:'bi-file-word', doc:'bi-file-word', png:'bi-file-image', jpg:'bi-file-image', jpeg:'bi-file-image', zip:'bi-file-zip', rar:'bi-file-zip'};
+  return map[ext] || 'bi-file-earmark';
+}
+
+function formatFileSize(bytes) {
+  if (!bytes) return '0 B';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/(1024*1024)).toFixed(1) + ' MB';
+}
+
+function checkUnreadMessages() {
+  fetch('/api/messages/unread-count')
+    .then(r => r.json()).then(d => {
+      const badge = document.getElementById('unreadBadge');
+      if (d.success && d.count > 0) {
+        badge.style.display = 'inline';
+        badge.textContent = d.count;
+      }
+    });
+}
+setInterval(checkUnreadMessages, 15000);
+
+// 页面加载时读取文件
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(loadSharedFiles, 500);
+});
+</script>
+{% endblock %}

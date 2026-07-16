@@ -1,0 +1,12 @@
+id: d
+name: '33'
+description: 新建工作流
+version: '1.0'
+steps:
+- type: skill
+  skill: audit_helper
+  args:
+    focus: summary
+- type: agent
+  prompt: 根据上一步结果生成办公简报。
+  max_steps: 3

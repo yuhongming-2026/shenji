@@ -1,0 +1,644 @@
+{% extends "base.html" %}
+{% block title %}审计概览 - 财务审计工作台{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <div>
+    <h1>审计概览</h1>
+    <p class="page-desc">三阶段审计流程：风险评估、控制测试与实质性程序</p>
+  </div>
+  <div class="page-actions">
+    <button class="btn btn-outline-primary btn-sm" onclick="location.reload()"><i class="bi bi-arrow-repeat"></i> 刷新</button>
+    <button class="btn btn-success btn-sm" onclick="runAllPhases()" id="btnRunAll"><i class="bi bi-play-fill"></i> 全量执行三阶段审计</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- Tab Navigation -->
+<ul class="nav nav-tabs mb-4" id="auditTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="tab-overview-btn" data-bs-toggle="tab" data-bs-target="#tab-overview" type="button" role="tab"><i class="bi bi-house"></i> 概览</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-phase1-btn" data-bs-toggle="tab" data-bs-target="#tab-phase1" type="button" role="tab"><i class="bi bi-calculator"></i> 风险评估 <span class="badge bg-secondary ms-1" id="phase1Badge" style="display:none">-</span></button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-phase2-btn" data-bs-toggle="tab" data-bs-target="#tab-phase2" type="button" role="tab"><i class="bi bi-shield-check"></i> 控制测试 <span class="badge bg-secondary ms-1" id="phase2Badge" style="display:none">-</span></button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-phase3-btn" data-bs-toggle="tab" data-bs-target="#tab-phase3" type="button" role="tab"><i class="bi bi-clipboard-check"></i> 实质性程序 <span class="badge bg-secondary ms-1" id="phase3Badge" style="display:none">-</span></button>
+  </li>
+</ul>
+
+<div class="tab-content">
+  <!-- ============================================================ -->
+  <!-- Tab 0: 概览 (existing content) -->
+  <!-- ============================================================ -->
+  <div class="tab-pane fade show active" id="tab-overview" role="tabpanel">
+    <div id="loadingArea" class="text-center py-5">
+      <div class="spinner-border text-primary" style="width:3rem;height:3rem"></div>
+      <p class="mt-3 text-muted">正在加载仪表盘数据...</p>
+    </div>
+    <div class="row mb-4" id="statsCards" style="display:none"></div>
+    <div class="row mb-4" id="chartsArea" style="display:none">
+      <div class="col-lg-6 mb-4"><div class="card h-100"><div class="card-header"><i class="bi bi-bar-chart"></i> Benford定律分析</div><div class="card-body"><canvas id="chartBenford" height="280"></canvas></div></div></div>
+      <div class="col-lg-6 mb-4"><div class="card h-100"><div class="card-header"><i class="bi bi-pie-chart"></i> 风险分布</div><div class="card-body"><canvas id="chartRisk" height="280"></canvas></div></div></div>
+      <div class="col-lg-6 mb-4"><div class="card h-100"><div class="card-header"><i class="bi bi-graph-up"></i> 金额分布</div><div class="card-body"><canvas id="chartAmount" height="280"></canvas></div></div></div>
+      <div class="col-lg-6 mb-4"><div class="card h-100"><div class="card-header"><i class="bi bi-diagram-3"></i> 分类占比</div><div class="card-body"><canvas id="chartCategory" height="280"></canvas></div></div></div>
+      <div class="col-12 mb-4"><div class="card"><div class="card-header"><i class="bi bi-activity"></i> 时间趋势</div><div class="card-body"><canvas id="chartTimeTrend" height="250"></canvas></div></div></div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- Tab 1: 风险评估 -->
+  <!-- ============================================================ -->
+  <div class="tab-pane fade" id="tab-phase1" role="tabpanel">
+    <div id="phase1Loading" class="text-center py-5">
+      <p class="text-muted">点击 <button class="btn btn-primary btn-sm" onclick="loadPhase('phase1')"><i class="bi bi-play"></i> 执行风险评估</button> 开始分析</p>
+    </div>
+    <div id="phase1Content" style="display:none">
+      <div class="row mb-3" id="phase1Stats"></div>
+      <div class="row mb-4" id="phase1Charts">
+        <div class="col-lg-6 mb-4"><div class="card h-100"><div class="card-header"><i class="bi bi-graph-up-arrow"></i> 财务比率分析</div><div class="card-body"><canvas id="chartRatios" height="280"></canvas></div></div></div>
+        <div class="col-lg-6 mb-4"><div class="card h-100"><div class="card-header"><i class="bi bi-calendar-week"></i> 月度收入趋势</div><div class="card-body"><canvas id="chartMonthlyRevenue" height="280"></canvas></div></div></div>
+        <div class="col-lg-6 mb-4"><div class="card h-100"><div class="card-header"><i class="bi bi-people"></i> 客户/对手方集中度</div><div class="card-body"><canvas id="chartConcentration" height="280"></canvas></div></div></div>
+        <div class="col-lg-6 mb-4"><div class="card h-100"><div class="card-header"><i class="bi bi-exclamation-triangle"></i> 发现清单</div><div class="card-body" id="phase1Findings" style="max-height:300px;overflow-y:auto"></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- Tab 2: 控制测试 -->
+  <!-- ============================================================ -->
+  <div class="tab-pane fade" id="tab-phase2" role="tabpanel">
+    <div id="phase2Loading" class="text-center py-5">
+      <p class="text-muted">点击 <button class="btn btn-primary btn-sm" onclick="loadPhase('phase2')"><i class="bi bi-play"></i> 执行控制测试</button> 开始测试</p>
+    </div>
+    <div id="phase2Content" style="display:none">
+      <div class="row mb-3" id="phase2Stats"></div>
+      <div class="row mb-4">
+        <div class="col-lg-6 mb-4"><div class="card h-100"><div class="card-header"><i class="bi bi-check-circle"></i> IT控制测试结果</div><div class="card-body"><canvas id="chartITControls" height="280"></canvas></div></div></div>
+        <div class="col-lg-6 mb-4"><div class="card h-100"><div class="card-header"><i class="bi bi-arrow-repeat"></i> 业务流程穿行测试</div><div class="card-body"><canvas id="chartBizSteps" height="280"></canvas></div></div></div>
+        <div class="col-12 mb-4"><div class="card"><div class="card-header"><i class="bi bi-list-ul"></i> 控制缺陷清单</div><div class="card-body" id="phase2Findings"></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- Tab 3: 实质性程序 -->
+  <!-- ============================================================ -->
+  <div class="tab-pane fade" id="tab-phase3" role="tabpanel">
+    <div id="phase3Loading" class="text-center py-5">
+      <p class="text-muted">点击 <button class="btn btn-primary btn-sm" onclick="loadPhase('phase3')"><i class="bi bi-play"></i> 执行实质性程序</button> 开始审计</p>
+    </div>
+    <div id="phase3Content" style="display:none">
+      <div class="row mb-3" id="phase3Stats"></div>
+      <div class="row mb-3" id="phase3Procedures"></div>
+    </div>
+  </div>
+</div>
+
+<!-- AI 审计助手 (shared across tabs) -->
+<div class="row mb-4 mt-3" id="aiArea" style="display:none">
+  <div class="col-12">
+    <div class="card border-info">
+      <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-robot"></i> AI 审计助手</span>
+        <small>基于当前审计数据智能问答</small>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-3 mb-3">
+            <label class="form-label small">本地模型</label>
+            <div class="form-control form-control-sm bg-light" id="aiModelInfo">云端 API（见模型管理）</div>
+          </div>
+          <div class="col-md-9 mb-3">
+            <label class="form-label small">快捷提问</label>
+            <div class="d-flex flex-wrap gap-1">
+              <button class="btn btn-outline-info btn-sm" onclick="askAI('综合分析三阶段审计结果，当前数据的主要风险是什么？')">主要风险</button>
+              <button class="btn btn-outline-info btn-sm" onclick="askAI('哪些交易最可疑？为什么？')">可疑交易</button>
+              <button class="btn btn-outline-info btn-sm" onclick="askAI('给出5条具体的审计建议和改进措施')">审计建议</button>
+              <button class="btn btn-outline-info btn-sm" onclick="askAI('简要总结三阶段审计结论')">总结报告</button>
+              <button class="btn btn-outline-info btn-sm" onclick="askAI('数据质量如何？内部控制有效吗？')">数据质量</button>
+            </div>
+          </div>
+        </div>
+        <div id="aiChat" class="bg-light rounded p-3" style="max-height:400px;overflow-y:auto">
+          <div class="text-muted text-center small">AI助手已就绪，基于当前审计数据回答你的问题</div>
+        </div>
+        <div class="input-group mt-3">
+          <button class="btn btn-outline-secondary" id="aiVoiceBtn" type="button" title="语音提问">
+            <i class="bi bi-mic"></i>
+          </button>
+          <input type="text" id="aiInput" class="form-control" placeholder="输入你的问题..." onkeypress="if(event.key==='Enter')sendAI()">
+          <button class="btn btn-info" onclick="sendAI()"><i class="bi bi-send"></i> 发送</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ============================================================
+// Global state
+// ============================================================
+let allCharts = {};
+let phaseCharts = {};
+let phaseDataCache = {};
+let phaseLoaded = {phase1:false, phase2:false, phase3:false};
+
+// ============================================================
+// 初始化
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+  // 恢复 API Key
+  fetch('/api/ai/status').then(r => r.json()).then(d => {
+    if (d.success && d.model) {
+      const el = document.getElementById('aiModelInfo');
+      if (el) el.textContent = d.ready ? d.model + '（已就绪）' : d.model + '（未下载）';
+    }
+  }).catch(() => {});
+
+  // AI 语音按钮
+  bindVoiceButton(document.getElementById('aiVoiceBtn'), {
+    recordSeconds: 6,
+    onStart(btn) { btn.innerHTML = '<i class="bi bi-mic-fill"></i>'; },
+    onResult(text) { document.getElementById('aiInput').value = text; sendAI(); },
+  });
+
+  // 加载概览数据
+  loadOverview();
+
+  // 标签切换懒加载
+  document.querySelectorAll('#auditTabs button[data-bs-toggle="tab"]').forEach(btn => {
+    btn.addEventListener('shown.bs.tab', function(e) {
+      const target = e.target.getAttribute('data-bs-target');
+      if (target === '#tab-phase1' && !phaseLoaded.phase1) {
+        phaseLoaded.phase1 = true;
+        loadPhase('phase1');
+      } else if (target === '#tab-phase2' && !phaseLoaded.phase2) {
+        phaseLoaded.phase2 = true;
+        loadPhase('phase2');
+      } else if (target === '#tab-phase3' && !phaseLoaded.phase3) {
+        phaseLoaded.phase3 = true;
+        loadPhase('phase3');
+      }
+    });
+  });
+
+  // 检查是否有已缓存的阶段数据
+  checkSessionState();
+});
+
+// ============================================================
+// 概览加载 (existing logic)
+// ============================================================
+function loadOverview() {
+  fetch('/api/dashboard')
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('loadingArea').style.display = 'none';
+      if (!data.success) {
+        document.getElementById('loadingArea').innerHTML = '<div class="alert alert-warning">未上传数据，请先 <a href="/">上传文件</a></div>';
+        document.getElementById('loadingArea').style.display = 'block';
+        return;
+      }
+      document.getElementById('statsCards').style.display = 'flex';
+      document.getElementById('chartsArea').style.display = 'flex';
+      document.getElementById('aiArea').style.display = 'flex';
+
+      const s = data.summary || {};
+      const sc = data.score || {};
+      const as = data.audit_summary || {};
+
+      let cardHtml = '';
+      cardHtml += '<div class="col-md-2 col-sm-4 mb-2"><div class="card bg-primary text-white h-100"><div class="card-body text-center p-2"><h4>' + (s.total_rows||0).toLocaleString() + '</h4><small>数据行数</small></div></div></div>';
+      cardHtml += '<div class="col-md-2 col-sm-4 mb-2"><div class="card bg-info text-white h-100"><div class="card-body text-center p-2"><h4>' + (s.total_columns||0) + '</h4><small>数据列数</small></div></div></div>';
+      cardHtml += '<div class="col-md-2 col-sm-4 mb-2"><div class="card bg-danger text-white h-100"><div class="card-body text-center p-2"><h4>' + (as.high_risk||0) + '</h4><small>高风险</small></div></div></div>';
+      cardHtml += '<div class="col-md-2 col-sm-4 mb-2"><div class="card bg-warning text-white h-100"><div class="card-body text-center p-2"><h4>' + (as.medium_risk||0) + '</h4><small>中风险</small></div></div></div>';
+      cardHtml += '<div class="col-md-2 col-sm-4 mb-2"><div class="card bg-success text-white h-100"><div class="card-body text-center p-2"><h4>' + (as.low_risk||0) + '</h4><small>低风险</small></div></div></div>';
+      cardHtml += '<div class="col-md-2 col-sm-4 mb-2"><div class="card bg-secondary text-white h-100"><div class="card-body text-center p-2"><h4>' + (sc.risk_percentage||0) + '%</h4><small>风险评分</small></div></div></div>';
+      document.getElementById('statsCards').innerHTML = cardHtml;
+
+      const c = data.charts || {};
+      renderOverviewCharts(c);
+    })
+    .catch(err => {
+      document.getElementById('loadingArea').innerHTML = '<div class="alert alert-danger">加载失败: ' + err.message + '</div>';
+    });
+}
+
+function renderOverviewCharts(c) {
+  destroyCharts(allCharts);
+  if (c.benford_data) {
+    allCharts.benford = new Chart(document.getElementById('chartBenford'), {
+      type: 'bar',
+      data: {labels: c.benford_data.labels, datasets: [
+        {label:'实际分布(%)',data:c.benford_data.observed,backgroundColor:'rgba(59,130,246,0.7)',borderColor:'#3b82f6',borderWidth:1},
+        {label:'Benford期望(%)',data:c.benford_data.expected,type:'line',borderColor:'#ef4444',borderWidth:2,fill:false,pointRadius:3}
+      ]},
+      options: {responsive:true,plugins:{title:{display:true,text:'首位数字分布 vs Benford期望'}}}
+    });
+  }
+  if (c.risk_distribution) {
+    allCharts.risk = new Chart(document.getElementById('chartRisk'), {
+      type: 'doughnut',
+      data: {labels:c.risk_distribution.labels,datasets:[{data:c.risk_distribution.values,backgroundColor:['#ef4444','#f59e0b','#10b981']}]},
+      options: {responsive:true,plugins:{title:{display:true,text:'审计规则风险分布'}}}
+    });
+  }
+  if (c.amount_distribution && c.amount_distribution.values && c.amount_distribution.values.length > 0) {
+    allCharts.amount = new Chart(document.getElementById('chartAmount'), {
+      type: 'bar',
+      data: {labels:c.amount_distribution.labels,datasets:[{label:'交易笔数',data:c.amount_distribution.values,backgroundColor:'rgba(16,185,129,0.7)',borderColor:'#10b981',borderWidth:1}]},
+      options: {responsive:true,plugins:{title:{display:true,text:'金额区间分布'}}}
+    });
+  }
+  if (c.category_data && c.category_data.values && c.category_data.values.length > 0) {
+    allCharts.category = new Chart(document.getElementById('chartCategory'), {
+      type: 'pie',
+      data: {labels:c.category_data.labels,datasets:[{data:c.category_data.values}]},
+      options: {responsive:true,plugins:{title:{display:true,text:'分类分布'}}}
+    });
+  }
+  if (c.time_trend && c.time_trend.values && c.time_trend.values.length > 0) {
+    allCharts.time = new Chart(document.getElementById('chartTimeTrend'), {
+      type: 'line',
+      data: {labels:c.time_trend.labels,datasets:[{label:'日汇总金额',data:c.time_trend.values,borderColor:'#8b5cf6',fill:false,tension:0.3,pointRadius:1}]},
+      options: {responsive:true,plugins:{title:{display:true,text:'每日交易金额趋势'}}}
+    });
+  }
+}
+
+function destroyCharts(obj) {
+  Object.values(obj).forEach(c => {
+    try { c.destroy(); } catch(e) {}
+  });
+  Object.keys(obj).forEach(k => delete obj[k]);
+}
+
+// ============================================================
+// 阶段加载
+// ============================================================
+async function loadPhase(phase) {
+  const loadingId = phase + 'Loading';
+  const contentId = phase + 'Content';
+  const loadingEl = document.getElementById(loadingId);
+  const contentEl = document.getElementById(contentId);
+
+  if (!loadingEl) { // already loaded
+    return;
+  }
+
+  if (phaseDataCache[phase]) {
+    // 已缓存，直接渲染
+    if (loadingEl) loadingEl.style.display = 'none';
+    contentEl.style.display = 'block';
+    renderPhase(phase, phaseDataCache[phase]);
+    return;
+  }
+
+  // 显示加载中
+  if (loadingEl) loadingEl.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">正在执行审计...</p></div>';
+
+  let apiUrl = '';
+  if (phase === 'phase1') apiUrl = '/api/audit/risk-assessment';
+  else if (phase === 'phase2') apiUrl = '/api/audit/control-tests';
+  else if (phase === 'phase3') apiUrl = '/api/audit/substantive-procedures';
+
+  try {
+    const resp = await fetch(apiUrl, {method: 'POST'});
+    const data = await resp.json();
+    if (data.success) {
+      phaseDataCache[phase] = data;
+      if (loadingEl) loadingEl.style.display = 'none';
+      contentEl.style.display = 'block';
+      renderPhase(phase, data);
+      updatePhaseBadge(phase, data);
+    } else {
+      if (loadingEl) loadingEl.innerHTML = '<div class="alert alert-danger">' + (data.error || '执行失败') + '</div>';
+    }
+  } catch(err) {
+    if (loadingEl) loadingEl.innerHTML = '<div class="alert alert-danger">请求失败: ' + err.message + '</div>';
+  }
+}
+
+function renderPhase(phase, data) {
+  if (phase === 'phase1') renderPhase1(data);
+  else if (phase === 'phase2') renderPhase2(data);
+  else if (phase === 'phase3') renderPhase3(data);
+}
+
+function updatePhaseBadge(phase, data) {
+  const badgeId = phase + 'Badge';
+  const badge = document.getElementById(badgeId);
+  if (!badge) return;
+  const summary = (data.phase1_results||data.phase2_results||data.phase3_results||{}).summary || data.summary || {};
+  const total = summary.total_findings || 0;
+  badge.style.display = 'inline';
+  badge.textContent = total + '项发现';
+  if (summary.overall_risk === 'high') badge.className = 'badge bg-danger ms-1';
+  else if (summary.overall_risk === 'medium') badge.className = 'badge bg-warning ms-1';
+  else badge.className = 'badge bg-success ms-1';
+}
+
+// ============================================================
+// Phase 1: 风险评估渲染
+// ============================================================
+function renderPhase1(data) {
+  const p1 = data.phase1_results || {};
+  const summary = p1.summary || {};
+  const procedures = p1.procedures || {};
+  const cd = data.chart_data || {};
+
+  // Stats
+  document.getElementById('phase1Stats').innerHTML =
+    '<div class="col-md-3 col-sm-6 mb-2"><div class="card bg-primary text-white h-100"><div class="card-body text-center p-2"><h4>' + (summary.total_procedures||0) + '</h4><small>评估项目</small></div></div></div>' +
+    '<div class="col-md-3 col-sm-6 mb-2"><div class="card bg-danger text-white h-100"><div class="card-body text-center p-2"><h4>' + (summary.high_risk||0) + '</h4><small>高风险</small></div></div></div>' +
+    '<div class="col-md-3 col-sm-6 mb-2"><div class="card bg-warning text-white h-100"><div class="card-body text-center p-2"><h4>' + (summary.medium_risk||0) + '</h4><small>中风险</small></div></div></div>' +
+    '<div class="col-md-3 col-sm-6 mb-2"><div class="card bg-info text-white h-100"><div class="card-body text-center p-2"><h4>' + (summary.total_findings||0) + '</h4><small>总发现数</small></div></div></div>';
+
+  // Charts
+  destroyCharts(phaseCharts);
+
+  if (cd.ratios) {
+    phaseCharts.ratios = new Chart(document.getElementById('chartRatios'), {
+      type: 'bar',
+      data: {labels: cd.ratios.labels, datasets: [{label:'比率值',data:cd.ratios.values,backgroundColor:'rgba(59,130,246,0.7)'}]},
+      options: {responsive:true,indexAxis:'y',plugins:{title:{display:true,text:'财务比率分析'}}}
+    });
+  }
+  if (cd.monthly_revenue && cd.monthly_revenue.labels && cd.monthly_revenue.labels.length > 0) {
+    phaseCharts.monthly = new Chart(document.getElementById('chartMonthlyRevenue'), {
+      type: 'line',
+      data: {labels: cd.monthly_revenue.labels, datasets: [{label:'月度收入',data:cd.monthly_revenue.values,borderColor:'#10b981',fill:false,tension:0.3,pointRadius:3}]},
+      options: {responsive:true,plugins:{title:{display:true,text:'月度收入趋势'}}}
+    });
+  }
+  if (cd.concentration && cd.concentration.labels && cd.concentration.labels.length > 0) {
+    phaseCharts.concentration = new Chart(document.getElementById('chartConcentration'), {
+      type: 'pie',
+      data: {labels: cd.concentration.labels, datasets: [{data: cd.concentration.values}]},
+      options: {responsive:true,plugins:{title:{display:true,text:'客户/对手方集中度'}}}
+    });
+  }
+
+  // Findings
+  let findingsHtml = '<ul class="list-group list-group-flush">';
+  for (const [key, proc] of Object.entries(procedures)) {
+    const riskBadge = {'high':'danger','medium':'warning','low':'success'}[proc.risk] || 'secondary';
+    findingsHtml += '<li class="list-group-item"><strong>' + proc.name + '</strong> <span class="badge bg-' + riskBadge + ' float-end">' + (proc.risk||'low') + '</span>';
+    findingsHtml += '<br><small class="text-muted">' + (proc.description||'') + '</small>';
+
+    // Sub-findings
+    const subFindings = proc.anomalies || proc.findings || proc.outliers || [];
+    if (subFindings.length > 0) {
+      findingsHtml += '<ul class="mt-2 small">';
+      subFindings.slice(0, 5).forEach(f => {
+        if (typeof f === 'object' && f.description) {
+          findingsHtml += '<li class="text-' + riskBadge + '">' + f.description + '</li>';
+        }
+      });
+      if (subFindings.length > 5) findingsHtml += '<li class="text-muted">...还有' + (subFindings.length-5) + '条</li>';
+      findingsHtml += '</ul>';
+    }
+    findingsHtml += '</li>';
+  }
+  findingsHtml += '</ul>';
+  document.getElementById('phase1Findings').innerHTML = findingsHtml;
+}
+
+// ============================================================
+// Phase 2: 控制测试渲染
+// ============================================================
+function renderPhase2(data) {
+  const p2 = data.phase2_results || {};
+  const summary = p2.summary || {};
+  const procedures = p2.procedures || {};
+  const cd = data.chart_data || {};
+
+  document.getElementById('phase2Stats').innerHTML =
+    '<div class="col-md-3 col-sm-6 mb-2"><div class="card bg-primary text-white h-100"><div class="card-body text-center p-2"><h4>' + (summary.total_procedures||0) + '</h4><small>测试项目</small></div></div></div>' +
+    '<div class="col-md-3 col-sm-6 mb-2"><div class="card bg-danger text-white h-100"><div class="card-body text-center p-2"><h4>' + (summary.high_risk||0) + '</h4><small>高风险</small></div></div></div>' +
+    '<div class="col-md-3 col-sm-6 mb-2"><div class="card bg-success text-white h-100"><div class="card-body text-center p-2"><h4>' + (summary.suspicious_count ? (summary.total_procedures - summary.suspicious_count) : '0') + '</h4><small>通过数</small></div></div></div>' +
+    '<div class="col-md-3 col-sm-6 mb-2"><div class="card bg-info text-white h-100"><div class="card-body text-center p-2"><h4>' + (summary.total_findings||0) + '</h4><small>总发现数</small></div></div></div>';
+
+  destroyCharts(phaseCharts);
+
+  if (cd.it_tests && cd.it_tests.labels && cd.it_tests.labels.length > 0) {
+    phaseCharts.it = new Chart(document.getElementById('chartITControls'), {
+      type: 'bar',
+      data: {labels: cd.it_tests.labels, datasets: [
+        {label:'通过',data:cd.it_tests.passed,backgroundColor:'rgba(16,185,129,0.7)'},
+        {label:'失败',data:cd.it_tests.failed,backgroundColor:'rgba(239,68,68,0.7)'}
+      ]},
+      options: {responsive:true,plugins:{title:{display:true,text:'IT控制测试'}},scales:{x:{stacked:true},y:{stacked:true,max:1.5}}}
+    });
+  }
+  if (cd.biz_steps && cd.biz_steps.labels && cd.biz_steps.labels.length > 0) {
+    phaseCharts.biz = new Chart(document.getElementById('chartBizSteps'), {
+      type: 'bar',
+      data: {labels: cd.biz_steps.labels, datasets: [
+        {label:'通过',data:cd.biz_steps.passed,backgroundColor:'rgba(16,185,129,0.7)'},
+        {label:'失败',data:cd.biz_steps.failed,backgroundColor:'rgba(239,68,68,0.7)'}
+      ]},
+      options: {responsive:true,plugins:{title:{display:true,text:'流程穿行测试'}},scales:{x:{stacked:true},y:{stacked:true,max:1.5}}}
+    });
+  }
+
+  // Findings
+  let findingsHtml = '';
+  for (const [key, proc] of Object.entries(procedures)) {
+    const riskBadge = {'high':'danger','medium':'warning','low':'success'}[proc.risk] || 'secondary';
+    findingsHtml += '<h6>' + proc.name + ' <span class="badge bg-' + riskBadge + '">' + (proc.risk||'low') + '</span></h6>';
+    findingsHtml += '<p class="small text-muted">' + (proc.description||'') + '</p>';
+
+    // Tests
+    if (proc.tests) {
+      findingsHtml += '<table class="table table-sm"><thead><tr><th>测试项</th><th>结果</th><th>详情</th></tr></thead><tbody>';
+      proc.tests.forEach(t => {
+        findingsHtml += '<tr><td>' + t.test + '</td><td>' + (t.passed ? '<span class="text-success">✅</span>' : '<span class="text-danger">❌</span>') + '</td><td class="small">' + (t.detail||'') + '</td></tr>';
+      });
+      findingsHtml += '</tbody></table>';
+    }
+
+    // Bottlenecks
+    (proc.findings||[]).forEach(f => {
+      findingsHtml += '<div class="alert alert-' + riskBadge + ' py-1 px-2 small">⚠ ' + (f.description||f.issue||'') + '</div>';
+    });
+  }
+  document.getElementById('phase2Findings').innerHTML = findingsHtml || '<p class="text-success">✅ 所有控制测试通过</p>';
+}
+
+// ============================================================
+// Phase 3: 实质性程序渲染
+// ============================================================
+function renderPhase3(data) {
+  const p3 = data.phase3_results || {};
+  const summary = p3.summary || {};
+  const procedures = p3.procedures || {};
+
+  document.getElementById('phase3Stats').innerHTML =
+    '<div class="col-md-2 col-sm-4 mb-2"><div class="card bg-primary text-white h-100"><div class="card-body text-center p-2"><h4>' + (summary.total_procedures||0) + '</h4><small>执行程序</small></div></div></div>' +
+    '<div class="col-md-2 col-sm-4 mb-2"><div class="card bg-danger text-white h-100"><div class="card-body text-center p-2"><h4>' + (summary.high_risk||0) + '</h4><small>高风险</small></div></div></div>' +
+    '<div class="col-md-2 col-sm-4 mb-2"><div class="card bg-warning text-white h-100"><div class="card-body text-center p-2"><h4>' + (summary.medium_risk||0) + '</h4><small>中风险</small></div></div></div>' +
+    '<div class="col-md-2 col-sm-4 mb-2"><div class="card bg-success text-white h-100"><div class="card-body text-center p-2"><h4>' + (summary.low_risk||0) + '</h4><small>低风险</small></div></div></div>' +
+    '<div class="col-md-2 col-sm-4 mb-2"><div class="card bg-info text-white h-100"><div class="card-body text-center p-2"><h4>' + (summary.total_findings||0) + '</h4><small>总发现</small></div></div></div>' +
+    '<div class="col-md-2 col-sm-4 mb-2"><div class="card bg-secondary text-white h-100"><div class="card-body text-center p-2"><h4>' + (summary.overall_risk||'low') + '</h4><small>综合风险</small></div></div></div>';
+
+  // Accordion of procedures
+  let procHtml = '<div class="accordion" id="phase3Accordion">';
+  let idx = 0;
+  for (const [key, proc] of Object.entries(procedures)) {
+    const riskBadge = {'high':'danger','medium':'warning','low':'success'}[proc.risk] || 'secondary';
+    const riskIcon = {'high':'🔴','medium':'🟡','low':'🟢'}[proc.risk] || '⚪';
+    const findings = proc.findings || [];
+    const collapsed = idx > 0 ? 'collapsed' : '';
+    const show = idx === 0 ? 'show' : '';
+
+    procHtml += '<div class="accordion-item">';
+    procHtml += '<h2 class="accordion-header"><button class="accordion-button ' + collapsed + '" data-bs-toggle="collapse" data-bs-target="#proc-' + idx + '">';
+    procHtml += riskIcon + ' <strong class="ms-2">' + proc.name + '</strong>';
+    procHtml += '<span class="badge bg-' + riskBadge + ' ms-2">' + (proc.risk||'low') + '</span>';
+    procHtml += '<small class="text-muted ms-2">' + findings.length + '项发现</small>';
+    procHtml += '</button></h2>';
+    procHtml += '<div id="proc-' + idx + '" class="accordion-collapse collapse ' + show + '" data-bs-parent="#phase3Accordion">';
+    procHtml += '<div class="accordion-body">';
+    procHtml += '<p class="small">' + (proc.description||'无描述') + '</p>';
+
+    if (findings.length > 0) {
+      procHtml += '<ul class="list-group list-group-flush">';
+      findings.forEach(f => {
+        const frb = {'high':'danger','medium':'warning','low':'success'}[f.risk||'low'] || 'secondary';
+        procHtml += '<li class="list-group-item py-2"><span class="badge bg-' + frb + ' me-1">' + (f.type||f.step||'') + '</span> ' + (f.description||'') + '</li>';
+      });
+      procHtml += '</ul>';
+    } else {
+      procHtml += '<p class="text-success small">✅ 未发现异常</p>';
+    }
+
+    procHtml += '</div></div></div>';
+    idx++;
+  }
+  procHtml += '</div>';
+  document.getElementById('phase3Procedures').innerHTML = procHtml;
+}
+
+// ============================================================
+// 全量执行三阶段
+// ============================================================
+async function runAllPhases() {
+  const btn = document.getElementById('btnRunAll');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 正在执行三阶段审计...';
+
+  try {
+    const resp = await fetch('/api/audit/run-all', {method: 'POST'});
+    const data = await resp.json();
+
+    if (data.success) {
+      const results = data.results || {};
+      // Cache phase data
+      if (results.phase1 && !results.phase1.error) {
+        phaseDataCache.phase1 = {success:true, phase1_results: results.phase1};
+        updatePhaseBadge('phase1', phaseDataCache.phase1);
+      }
+      if (results.phase2 && !results.phase2.error) {
+        phaseDataCache.phase2 = {success:true, phase2_results: results.phase2};
+        updatePhaseBadge('phase2', phaseDataCache.phase2);
+      }
+      if (results.phase3 && !results.phase3.error) {
+        phaseDataCache.phase3 = {success:true, phase3_results: results.phase3};
+        updatePhaseBadge('phase3', phaseDataCache.phase3);
+      }
+
+      showToast('三阶段审计完成！发现' + (data.total_findings||0) + '项问题', data.total_findings > 0 ? 'warning' : 'success');
+
+      // Update score display
+      if (data.score_v2) {
+        const sc = data.score_v2;
+        document.getElementById('statsCards').querySelectorAll('.card')[5].querySelector('h4').textContent = sc.risk_percentage + '%';
+      }
+    } else {
+      showToast('执行失败: ' + (data.error||'未知错误'), 'error');
+    }
+  } catch(err) {
+    showToast('请求失败: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-play-fill"></i> 全量执行三阶段审计';
+  }
+}
+
+// ============================================================
+// 检查会话状态
+// ============================================================
+function checkSessionState() {
+  fetch('/api/audit/session-state')
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        if (data.phases_run.phase1) {
+          updatePhaseBadge('phase1', {summary: {total_findings: data.total_findings||0, overall_risk: data.score_v2?.overall_risk}});
+        }
+        if (data.phases_run.phase2) {
+          updatePhaseBadge('phase2', {summary: {total_findings: 0}});
+        }
+        if (data.phases_run.phase3) {
+          updatePhaseBadge('phase3', {summary: {total_findings: 0}});
+        }
+        if (data.score_v2) {
+          phaseLoaded = {phase1: data.phases_run.phase1, phase2: data.phases_run.phase2, phase3: data.phases_run.phase3};
+        }
+      }
+    }).catch(() => {});
+}
+
+// ============================================================
+// AI 助手
+// ============================================================
+function askAI(question) {
+  document.getElementById('aiInput').value = question;
+  sendAI();
+}
+
+function sendAI() {
+  const input = document.getElementById('aiInput');
+  const msg = input.value.trim();
+  if (!msg) return;
+
+  const chatBox = document.getElementById('aiChat');
+  chatBox.innerHTML += '<div class="text-end mb-2"><span class="badge bg-primary">你</span> ' + msg + '</div>';
+  chatBox.innerHTML += '<div id="aiTyping" class="text-muted small mb-2"><span class="badge bg-info">AI</span> 思考中...</div>';
+  chatBox.scrollTop = chatBox.scrollHeight;
+  input.value = '';
+
+  fetch('/api/ai/chat', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({message: msg})
+  })
+  .then(r => r.json())
+  .then(data => {
+    const typingEl = document.getElementById('aiTyping');
+    if (typingEl) typingEl.remove();
+    if (data.success) {
+      chatBox.innerHTML += '<div class="mb-3"><span class="badge bg-info">AI</span> ' + data.reply.replace(/\n/g, '<br>') + '</div>';
+    } else {
+      chatBox.innerHTML += '<div class="mb-2 text-danger"><span class="badge bg-info">AI</span> 错误: ' + (data.error||'未知') + '</div>';
+    }
+    chatBox.scrollTop = chatBox.scrollHeight;
+  })
+  .catch(err => {
+    const typingEl = document.getElementById('aiTyping');
+    if (typingEl) typingEl.remove();
+    chatBox.innerHTML += '<div class="mb-2 text-danger"><span class="badge bg-info">AI</span> 请求失败: ' + err.message + '</div>';
+    chatBox.scrollTop = chatBox.scrollHeight;
+  });
+}
+</script>
+{% endblock %}

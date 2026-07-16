@@ -1,0 +1,23 @@
+# AutoDL 公网暴露：host 网络 + 6006 端口（映射到 AutoDL 自定义服务 HTTPS 地址）
+services:
+  audit-app:
+    network_mode: host
+    ports: !reset []
+    environment:
+      PORT: "6006"
+    command:
+      - gunicorn
+      - --preload
+      - --bind
+      - 0.0.0.0:6006
+      - --workers
+      - "1"
+      - --worker-class
+      - gthread
+      - --threads
+      - "16"
+      - --keep-alive
+      - "5"
+      - --timeout
+      - "120"
+      - app:app

@@ -1,0 +1,21 @@
+{
+  "id": "office_files",
+  "name": "办公文件 MCP（示例）",
+  "description": "连接外部 MCP 服务读写办公文档。将 url 改为你的 MCP HTTP 端点即可启用。",
+  "transport": "http",
+  "url": "",
+  "headers": {},
+  "tools": [
+    {
+      "name": "read_document",
+      "description": "读取办公文档内容",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "文件路径" }
+        },
+        "required": ["path"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "description": "在线推理策略（Bandit 式强化学习调参，非模型权重训练）",
+  "bypass_enabled": true,
+  "cache_enabled": true,
+  "intents": {
+    "navigate": {
+      "max_tokens": 100,
+      "temperature": 0.1,
+      "fast": true,
+      "reward_ema": 0.8725,
+      "samples": 1
+    },
+    "finance_query": {
+      "max_tokens": 211,
+      "temperature": 0.15,
+      "fast": true,
+      "reward_ema": 0.8772,
+      "samples": 3
+    },
+    "simple_qa": {
+      "max_tokens": 256,
+      "temperature": 0.2,
+      "fast": true,
+      "reward_ema": 0.8194,
+      "samples": 2
+    },
+    "tool_agent": {
+      "max_tokens": 384,
+      "temperature": 0.25,
+      "fast": true,
+      "reward_ema": 0.7,
+      "samples": 0
+    },
+    "complex": {
+      "max_tokens": 512,
+      "temperature": 0.35,
+      "fast": false,
+      "reward_ema": 0.65,
+      "samples": 0
+    }
+  }
+}

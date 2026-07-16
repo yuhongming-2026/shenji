@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block title %}AI Agent · 审计工作台{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── 色彩系统 ── */
+:root {
+  --agent-amber: #ff6b00;
+  --agent-blue: #2563eb;
+  --agent-green: #059669;
+  --agent-purple: #7c3aed;
+  --agent-rose: #e11d48;
+  --agent-ink: #111111;
+  --agent-paper: #fffdf7;
+  --agent-line: #e5e0d5;
+  --agent-bold-shadow: 3px 3px 0 #111;
+}
+
+.agent-layout { display:grid; grid-template-columns:260px 1fr 280px; gap:20px; min-height:calc(100vh - 160px); }
+@media (max-width:1200px) { .agent-layout { grid-template-columns:1fr; } }
+
+/* ── 卡片 ── */
+.ag-card { background:#fff; border:2px solid var(--agent-ink); border-radius:0; overflow:hidden; display:flex; flex-direction:column; }
+.ag-card.shadow { box-shadow:var(--agent-bold-shadow); }
+.ag-card-head { padding:10px 14px; border-bottom:1px solid var(--agent-ink); font-weight:700; font-size:13px; letter-spacing:.5px; display:flex; align-items:center; justify-content:space-between; gap:8px; text-transform:uppercase; }
+.ag-card-body { padding:12px 14px; overflow:auto; flex:1; }
+
+/* ── 会话区 ── */
+.agent-chat-msgs { flex:1; overflow-y:auto; padding:16px; min-height:360px; max-height:60vh; }
+.agent-msg { margin-bottom:14px; }
+.agent-msg.user { text-align:right; }
+.agent-bubble { display:inline-block; max-width:82%; padding:10px 14px; border-radius:0; text-align:left; word-break:break-word; font-size:14px; }
+.agent-msg.user .agent-bubble { background:var(--agent-ink); color:#fff; border:2px solid var(--agent-ink); }
+.agent-msg.bot .agent-bubble { background:var(--agent-paper); border:2px solid var(--agent-ink); }
+.agent-steps { margin-top:6px; font-size:11px; color:#666; }
+.agent-msg.bot .agent-bubble p { margin:4px 0; }
+.agent-msg.bot .agent-bubble pre { background:#f5f3ed; padding:8px; border:1px solid var(--agent-line); font-size:11px; max-height:180px; overflow:auto; }
+
+/* ── 输入区 ── */
+.agent-input-bar { border-top:1px solid var(--agent-ink); padding:10px 12px; display:flex; gap:8px; align-items:flex-end; background:var(--agent-paper); }
+.agent-input-bar textarea { flex:1; min-height:42px; max-height:180px; resize:none; border:2px solid var(--agent-ink); padding:8px 12px; font-size:14px; line-height:1.5; background:#fff; font-family:inherit; }
+.agent-input-bar textarea:focus { outline:none; border-color:var(--agent-amber); box-shadow:2px 2px 0 rgba(255,107,0,.3); }
+.agent-input-bar .btn { border-radius:0; border:2px solid var(--agent-ink); font-weight:700; text-transform:uppercase; letter-spacing:.5px; font-size:12px; }
+.agent-input-bar .btn-primary { background:var(--agent-ink); color:#fff; }
+.agent-input-bar .btn-primary:hover { background:var(--agent-amber); border-color:var(--agent-amber); }
+.agent-input-bar .btn-outline-secondary { background:#fff; }
+
+/* ── 模式按钮 ── */
+.mode-btn-group { display:flex; gap:0; }
+.mode-btn { padding:5px 10px; border:2px solid var(--agent-ink); background:#fff; cursor:pointer; font-size:11px; font-weight:700; letter-spacing:.3px; text-transform:uppercase; margin-left:-2px; }
+.mode-btn:first-child { margin-left:0; }
+.mode-btn.active.single { background:var(--agent-blue); color:#fff; border-color:var(--agent-blue); }
+.mode-btn.active.auto { background:var(--agent-green); color:#fff; border-color:var(--agent-green); }
+.mode-btn.active.multi { background:var(--agent-purple); color:#fff; border-color:var(--agent-purple); }
+.mode-btn:hover:not(.active) { background:#f0ebe0; }
+
+/* ── 权限按钮 ── */
+.perm-btn { padding:4px 8px; border:2px solid var(--agent-ink); background:#fff; cursor:pointer; font-size:10px; font-weight:700; text-transform:uppercase; }
+.perm-btn.perm-readonly.active { background:#94a3b8; color:#fff; }
+.perm-btn.perm-ask.active { background:var(--agent-amber); color:#fff; border-color:var(--agent-amber); }
+.perm-btn.perm-auto.active { background:var(--agent-green); color:#fff; border-color:var(--agent-green); }
+
+/* ── 扩展/工具项 ── */
+.ag-item { padding:6px 8px; border:1px solid var(--agent-line); margin-bottom:4px; cursor:pointer; font-size:12px; background:#fff; }
+.ag-item:hover { border-color:var(--agent-amber); background:var(--agent-paper); }
+.ag-item .tag { display:inline-block; padding:1px 5px; border:1px solid var(--agent-ink); font-size:9px; font-weight:700; text-transform:uppercase; margin-left:4px; }
+.tag-skill { background:#dbeafe; color:var(--agent-blue); }
+.tag-mcp { background:#fce7f3; color:var(--agent-rose); }
+.tag-agent { background:#ede9fe; color:var(--agent-purple); }
+.tag-workflow { background:#d1fae5; color:var(--agent-green); }
+
+/* ── 文件附件预览 ── */
+.file-attach-preview { display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border:2px dashed var(--agent-amber); background:#fff7ed; font-size:12px; margin-right:8px; }
+.file-attach-preview .remove-attach { cursor:pointer; font-weight:700; color:var(--agent-rose); }
+.agent-chat-msgs.drag-over { background:#fff7ed; outline:3px dashed var(--agent-amber); outline-offset:-6px; }
+
+/* ── 步骤详情 ── */
+.step-detail { margin:8px 0; border:2px solid var(--agent-ink); }
+.step-detail-header { padding:8px 12px; background:var(--agent-paper); cursor:pointer; display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; border-bottom:1px solid var(--agent-line); user-select:none; text-transform:uppercase; letter-spacing:.3px; }
+.step-detail-header:hover { background:#f5f0e5; }
+.step-detail-body { display:none; padding:10px 12px; font-size:12px; background:#fff; }
+.step-detail-body.open { display:block; }
+.step-detail-body pre { margin:0; white-space:pre-wrap; word-break:break-all; max-height:180px; overflow-y:auto; font-size:11px; background:#faf9f5; padding:6px; border:1px solid var(--agent-line); }
+.step-duration { font-size:10px; color:#888; font-weight:400; }
+
+/* ── 权限卡片 ── */
+.perm-card { margin:8px 0; padding:14px; border:3px solid var(--agent-amber); background:#fffdf3; }
+@keyframes borderPulse { 0%,100% { border-color: var(--agent-amber); } 50% { border-color: var(--agent-rose); } }
+.perm-card.urgent { animation: borderPulse 1.2s ease-in-out infinite; }
+
+/* ── 模型列表 ── */
+.model-mini-row { display:flex; justify-content:space-between; align-items:center; padding:3px 0; font-size:11px; border-bottom:1px solid var(--agent-line); }
+.model-mini-row .dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:4px; }
+.dot-ok { background:var(--agent-green); }
+.dot-no { background:#ccc; }
+
+/* ── Select ── */
+.ag-select { border:2px solid var(--agent-ink); border-radius:0; padding:4px 8px; font-size:12px; background:#fff; font-weight:600; }
+.ag-btn-sm { padding:4px 10px; border:2px solid var(--agent-ink); background:#fff; font-size:11px; font-weight:700; cursor:pointer; text-transform:uppercase; letter-spacing:.3px; }
+.ag-btn-sm:hover { background:var(--agent-paper); }
+.ag-btn-sm.danger { color:var(--agent-rose); }
+.ag-btn-sm.danger:hover { background:#fef2f2; border-color:var(--agent-rose); }
+
+/* ── dash divider ── */
+.dash-line { height:2px; background:repeating-linear-gradient(90deg, var(--agent-ink) 0, var(--agent-ink) 8px, transparent 8px, transparent 14px); margin:8px 0; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+  <div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+      <span style="font-size:11px;font-weight:700;letter-spacing:3px;color:var(--agent-amber);text-transform:uppercase;">Agent · Workspace</span>
+    </div>
+    <h1 style="font-size:clamp(1.5rem,3vw,2rem);font-weight:900;margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span>AI Agent</span>
+      <span style="background:var(--agent-amber);color:#fff;padding:2px 10px;font-size:14px;">工作台</span>
+    </h1>
+    <p style="font-size:13px;color:#666;margin:4px 0 0;">深度绑定审计系统 · 31个工具 · 一键权限 · 3种运行模式</p>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+    <div style="display:flex;gap:0;">
+      <button class="perm-btn perm-readonly" data-mode="readonly" title="只读模式">📖 只读</button>
+      <button class="perm-btn perm-ask active" data-mode="ask" title="询问模式">❓ 询问</button>
+      <button class="perm-btn perm-auto" data-mode="auto" title="自动模式">⚡ 自动</button>
+    </div>
+    <a href="/agent/develop" class="ag-btn-sm" style="text-decoration:none;">&lt;/&gt; 开发</a>
+    <button class="ag-btn-sm" onclick="scanLocalModels()">🔍 扫描</button>
+    <button class="ag-btn-sm danger" onclick="newConversation()">+ 新建</button>
+  </div>
+</div>
+<div class="dash-line"></div>
+{% endblock %}
+
+{% block content %}
+<div class="agent-layout">
+  <!-- 左侧：扩展 & 工具 & 模型 -->
+  <div>
+    <div class="ag-card shadow" style="margin-bottom:16px;">
+      <div class="ag-card-head" style="background:var(--agent-ink);color:#fff;">🔌 扩展 & 工具</div>
+      <div class="ag-card-body" id="extList" style="max-height:280px;"><div class="text-muted small">加载中…</div></div>
+      <div class="ag-card-head" style="border-top:1px solid var(--agent-ink);">🔧 可用工具 <span class="small text-muted" id="toolCount"></span></div>
+      <div class="ag-card-body small" id="toolList" style="max-height:180px;"><div class="text-muted">加载中…</div></div>
+    </div>
+    <div class="ag-card shadow">
+      <div class="ag-card-head" style="background:var(--agent-purple);color:#fff;">🤖 已配置模型</div>
+      <div class="ag-card-body" id="modelStatus" style="max-height:280px;"><div class="text-muted small">加载中…</div></div>
+    </div>
+  </div>
+
+  <!-- 中间：对话 -->
+  <div class="ag-card shadow">
+    <div class="ag-card-head" style="background:var(--agent-paper);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span>💬 Agent 对话</span>
+      <select id="convSelect" class="ag-select" style="max-width:170px;flex:1;" onchange="switchConversation(this.value)">
+        <option value="">+ 新对话…</option>
+      </select>
+      <div class="mode-btn-group">
+        <button class="mode-btn single active" data-mode="single">👤 单模型</button>
+        <button class="mode-btn auto" data-mode="auto">🔮 Auto</button>
+        <button class="mode-btn multi" data-mode="multi">👥 多Agent</button>
+      </div>
+      <select id="agentModel" class="ag-select" style="max-width:180px;"></select>
+      <button class="ag-btn-sm danger" id="btnDeleteModel" onclick="deleteCurrentModel()" style="display:none;" title="删除模型">✕</button>
+      <label style="font-size:12px;white-space:nowrap;display:flex;align-items:center;gap:3px;cursor:pointer;">
+        <input type="checkbox" id="agentUseTools" checked> 工具
+      </label>
+    </div>
+    <div class="agent-chat-msgs" id="agentChat">
+      <div class="agent-msg bot">
+        <div class="agent-bubble">
+          <strong style="font-size:16px;">你好！我是审计 AI Agent 🎯</strong><br><br>
+          <span style="display:inline-block;background:var(--agent-blue);color:#fff;padding:1px 8px;font-size:10px;font-weight:700;margin-right:4px;">单模型</span>
+          <span style="display:inline-block;background:var(--agent-green);color:#fff;padding:1px 8px;font-size:10px;font-weight:700;margin-right:4px;">Auto</span>
+          <span style="display:inline-block;background:var(--agent-purple);color:#fff;padding:1px 8px;font-size:10px;font-weight:700;">多Agent</span>
+          <br><br>
+          📎 <b>拖拽文件</b>到此处上传 · 🔍 点击 <b>操作流程</b> 查看AI工作细节
+        </div>
+      </div>
+    </div>
+    <!-- 文件附件预览 -->
+    <div id="attachPreviewArea" style="display:none; padding:6px 14px;"></div>
+    <div class="agent-input-bar">
+      <label class="ag-btn-sm" for="agentFileInput" title="选择文件" style="cursor:pointer;">📎</label>
+      <input type="file" id="agentFileInput" style="display:none" accept=".csv,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.bmp,.webp" onchange="onFileSelected()">
+      <textarea id="agentInput" rows="1" placeholder="输入任务…"
+        oninput="autoResizeTextarea(this)"
+        onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendAgentMessage();}"></textarea>
+      <button class="ag-btn-sm" style="background:var(--agent-amber);color:#fff;border-color:var(--agent-amber);" onclick="sendAgentMessage()">发送 →</button>
+    </div>
+  </div>
+
+  <!-- 右侧：工作流 & 飞书 -->
+  <div>
+    <div class="ag-card shadow" style="margin-bottom:16px;">
+      <div class="ag-card-head" style="background:var(--agent-green);color:#fff;">⚡ 工作流</div>
+      <div class="ag-card-body" id="workflowList"><div class="text-muted small">加载中…</div></div>
+    </div>
+    <div class="ag-card shadow">
+      <div class="ag-card-head">💬 飞书 Bot</div>
+      <div class="ag-card-body small" id="feishuStatus">
+        <div class="text-muted mb-2">检查连接状态…</div>
+        <a href="/feishu/setup" class="ag-btn-sm" style="display:block;text-align:center;text-decoration:none;">配置飞书</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 飞书设置模态框 -->
+<div class="modal fade" id="feishuSetupModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content" style="border-radius:0;border:2px solid var(--agent-ink);">
+    <div class="modal-header" style="background:var(--agent-ink);color:#fff;"><h5 class="modal-title">飞书机器人配置</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="mb-3"><label class="form-label fw-bold small">App ID</label><input type="text" id="fsAppId" class="form-control" style="border-radius:0;border:2px solid var(--agent-ink);" placeholder="飞书应用 App ID"></div>
+      <div class="mb-3"><label class="form-label fw-bold small">App Secret</label><input type="password" id="fsAppSecret" class="form-control" style="border-radius:0;border:2px solid var(--agent-ink);" placeholder="飞书应用 App Secret"></div>
+      <div class="mb-3"><label class="form-label fw-bold small">Webhook 地址</label><input type="text" readonly class="form-control" id="fsWebhookUrl" style="border-radius:0;border:2px solid var(--agent-ink);background:#f5f3ed;"></div>
+    </div>
+    <div class="modal-footer"><button type="button" class="ag-btn-sm" data-bs-dismiss="modal">取消</button><button type="button" class="ag-btn-sm" style="background:var(--agent-amber);color:#fff;border-color:var(--agent-amber);" onclick="saveFeishuConfig()">保存</button></div>
+  </div></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/agent.js') }}?v=3"></script>
+{% endblock %}

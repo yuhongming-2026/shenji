@@ -1,0 +1,13 @@
+{
+  "id": "expense_review",
+  "name": "费用报销审阅",
+  "description": "小程序：快速审阅报销相关数据与风险点",
+  "version": "1.0.0",
+  "entry": "/dashboard",
+  "icon": "bi-receipt",
+  "prompts": [
+    "检查当前数据中的大额费用异常",
+    "列出可能需要进一步审计的报销条目"
+  ],
+  "required_tools": ["get_audit_context", "search_knowledge"]
+}

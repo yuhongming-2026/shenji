@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}审计报告 - 财务审计工作台{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <div>
+    <h1>审计报告</h1>
+    <p class="page-desc">综合风险评级、发现清单与规则检测汇总</p>
+  </div>
+  <div class="page-actions">
+    <a href="/api/export/html" class="btn btn-outline-primary btn-sm"><i class="bi bi-download"></i> 导出HTML</a>
+    <a href="/api/export/excel" class="btn btn-outline-success btn-sm"><i class="bi bi-file-earmark-excel"></i> 导出Excel</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="loadingReport" class="loading-state"><div class="spinner-border"></div><p class="mt-3">生成审计报告...</p></div>
+
+<div id="reportContent" style="display:none">
+  <div class="row mb-4" id="scoreCards"></div>
+
+  <h3 class="section-title"><i class="bi bi-shield-exclamation"></i> 风险发现清单</h3>
+  <div class="panel mb-4 panel-body-flush">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead><tr><th>#</th><th>来源规则</th><th>风险等级</th><th>说明</th></tr></thead>
+        <tbody id="riskItemsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3 class="section-title"><i class="bi bi-list-check"></i> 审计规则汇总</h3>
+  <div class="row mb-4" id="reportRuleCards"></div>
+
+  <h3 class="section-title"><i class="bi bi-graph-up-arrow"></i> 异常检测汇总</h3>
+  <div class="row mb-4" id="reportAnomalyCards"></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  fetch('/api/analyze', {method:'POST'})
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('loadingReport').style.display = 'none';
+      if (!data.success) {
+        document.getElementById('loadingReport').innerHTML = '<div class="alert alert-warning text-center">无分析结果 — 请先 <a href="/">上传数据</a> 并 <a href="/analysis">执行分析</a></div>';
+        document.getElementById('loadingReport').style.display = 'block';
+        return;
+      }
+      document.getElementById('reportContent').style.display = 'block';
+
+      const score = data.score;
+      const riskLabels = {high:'高风险',medium:'中风险',low:'低风险'};
+
+      let cards = '';
+      cards += '<div class="col-md-4 mb-3"><div class="panel h-100"><div class="panel-body score-display"><div class="score-label">综合风险评级</div><div class="score-value risk-' + (score.overall_risk||'low') + '">' + (riskLabels[score.overall_risk]||'--') + '</div><span class="badge bg-secondary">' + score.risk_percentage + '%</span></div></div></div>';
+      cards += '<div class="col-md-4 mb-3"><div class="panel h-100"><div class="panel-body score-display"><div class="score-label">风险得分</div><div class="score-value">' + score.risk_score + '</div><span class="text-muted">/ ' + score.max_score + ' 分</span></div></div></div>';
+      cards += '<div class="col-md-4 mb-3"><div class="panel h-100"><div class="panel-body score-display"><div class="score-label">生成时间</div><div class="score-value" style="font-size:1.25rem">' + score.generated_at + '</div></div></div></div>';
+      document.getElementById('scoreCards').innerHTML = cards;
+
+      let itemsHtml = '';
+      (score.risk_items || []).forEach((item, i) => {
+        const badge = item.risk === 'high' ? 'danger' : (item.risk === 'medium' ? 'warning' : 'success');
+        const label = riskLabels[item.risk] || '--';
+        itemsHtml += '<tr><td>' + (i+1) + '</td><td>' + item.name + '</td><td><span class="badge bg-' + badge + '">' + label + '</span></td><td>' + item.description + '</td></tr>';
+      });
+      document.getElementById('riskItemsBody').innerHTML = itemsHtml || '<tr><td colspan="4" class="text-center text-success">未发现明确风险项</td></tr>';
+
+      const riskBadge = {high:'danger',medium:'warning',low:'success',unknown:'secondary'};
+      let ruleHtml = '';
+      data.audit_results.forEach(r => {
+        ruleHtml += '<div class="col-md-6 mb-2"><div class="panel rule-card"><div class="panel-body d-flex justify-content-between align-items-start"><span><strong>' + r.name + '</strong><br><small class="text-muted">' + (r.description||'') + '</small></span><span class="badge bg-' + (riskBadge[r.risk]||'secondary') + '">' + (riskLabels[r.risk]||'--') + '</span></div></div></div>';
+      });
+      document.getElementById('reportRuleCards').innerHTML = ruleHtml;
+
+      const detectors = data.anomaly_results.detectors || {};
+      let anomHtml = '';
+      for (const [key, d] of Object.entries(detectors)) {
+        if (d.error) {
+          anomHtml += '<div class="col-md-4 mb-2"><div class="panel"><div class="panel-body"><strong>' + (d.name||key) + '</strong><br><span class="text-danger">' + d.error + '</span></div></div></div>';
+        } else {
+          anomHtml += '<div class="col-md-4 mb-2"><div class="panel"><div class="panel-body"><strong>' + (d.name||key) + '</strong><br>总记录: ' + (d.total_records||0).toLocaleString() + ' | 异常: <span class="text-danger fw-bold">' + (d.anomaly_count||0) + '</span> (' + (d.anomaly_pct||0) + '%)</div></div></div>';
+        }
+      }
+      document.getElementById('reportAnomalyCards').innerHTML = anomHtml;
+    });
+});
+</script>
+{% endblock %}

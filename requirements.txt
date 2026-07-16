@@ -1,0 +1,13 @@
+flask>=2.0
+pandas>=1.0
+numpy>=1.19
+openpyxl>=3.0
+xlrd>=2.0
+scipy>=1.5
+pillow>=9.0
+pytesseract>=0.3.10
+SpeechRecognition>=3.10
+pydub>=0.25.1
+gunicorn>=21.0
+flask-compress>=1.14
+PyYAML>=6.0

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}搜索：{{ query }} - 财务审计工作台{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <div>
+    <h1>全文检索</h1>
+    <p class="page-desc">
+      关键词：<strong>{{ query }}</strong>
+      <span class="text-muted"> · {{ search_engine }}</span>
+    </p>
+  </div>
+  <div class="page-actions">
+    <form class="d-flex gap-2" action="/search" method="get">
+      <input type="text" name="q" class="form-control form-control-sm" value="{{ query }}" placeholder="继续搜索…" style="min-width:200px" required>
+      <button type="submit" class="btn btn-primary btn-sm">搜索</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+{% if search_ok %}
+<div class="search-meta mb-3">
+  共 {{ results|length }} 条结果 · {{ search_note }}
+</div>
+<div class="search-results">
+  {% for item in results %}
+  <article class="search-result-item">
+    <h2 class="search-result-title">
+      {% if item.url.startswith('http') %}
+      <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a>
+      {% else %}
+      <a href="{{ item.url }}">{{ item.title }}</a>
+      {% endif %}
+    </h2>
+    {% if item.url.startswith('http') %}
+    <div class="search-result-url">{{ item.url }}</div>
+    {% endif %}
+    <p class="search-result-snippet">{{ item.content }}</p>
+    <div class="d-flex gap-2 align-items-center flex-wrap mt-1">
+      <span class="badge bg-secondary search-engine-badge">{{ item.engine }}</span>
+      {% if user_features.get('ai', true) %}
+      <button type="button" class="btn btn-sm btn-outline-primary"
+        data-ai-q="请解释审计概念：{{ item.title }}"
+        onclick="openAiWithQuestion(this.dataset.aiQ)">
+        <i class="bi bi-robot"></i> 问 AI
+      </button>
+      {% endif %}
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="panel">
+  <div class="panel-body text-center py-5">
+    <i class="bi bi-search" style="font-size:2rem;color:var(--ink-faint)"></i>
+    <h5 class="mt-3">未找到匹配内容</h5>
+    <p class="text-muted mb-0" style="font-size:13px">
+      {% if search_error %}{{ search_error }}{% else %}请尝试其他关键词，如「应付账款」「Benford」「函证」{% endif %}
+    </p>
+    <a href="javascript:history.back()" class="btn btn-outline-primary btn-sm mt-3">返回</a>
+  </div>
+</div>
+{% endif %}
+
+<div class="search-footer-note">
+  搜索引擎：<strong>SQLite FTS5</strong>（开源，本地 BM25 相关性排序，已索引知识库 / 历史记录 / 上传数据，离线可用）
+</div>
+{% endblock %}

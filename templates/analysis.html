@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}规则检测 - 财务审计工作台{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <div>
+    <h1>规则检测</h1>
+    <p class="page-desc">执行审计规则与统计异常检测，生成风险分析结果</p>
+  </div>
+  <div class="page-actions">
+    <button class="btn btn-primary" id="btnAnalyze" onclick="runAnalysis()"><i class="bi bi-play-fill"></i> 执行审计分析</button>
+    <a href="/report" class="btn btn-success" id="btnReport" style="display:none"><i class="bi bi-file-earmark-text"></i> 查看报告</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="loadingArea" class="loading-state"><div class="spinner-border"></div><p class="mt-3">正在执行审计分析...</p></div>
+
+<div id="analysisResults" style="display:none">
+  <div class="metric-grid" id="resCards"></div>
+
+  <h3 class="section-title"><i class="bi bi-list-check"></i> 审计规则检测结果</h3>
+  <div class="row mb-4" id="ruleCards"></div>
+
+  <h3 class="section-title"><i class="bi bi-graph-up-arrow"></i> 统计异常检测</h3>
+  <div class="row mb-4" id="anomalyCards"></div>
+
+  <div class="d-flex gap-2 mb-4">
+    <a href="/report" class="btn btn-success"><i class="bi bi-file-earmark-text"></i> 查看审计报告</a>
+    <button class="btn btn-outline-primary" onclick="runAnalysis()"><i class="bi bi-arrow-repeat"></i> 重新分析</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() { runAnalysis(); });
+
+function runAnalysis() {
+  document.getElementById('loadingArea').style.display = 'block';
+  document.getElementById('analysisResults').style.display = 'none';
+  document.getElementById('btnReport').style.display = 'none';
+
+  fetch('/api/analyze', {method:'POST'})
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('loadingArea').style.display = 'none';
+      if (!data.success) {
+        document.getElementById('loadingArea').innerHTML = '<div class="alert alert-warning text-center">' + (data.error || '未上传数据') + ' — <a href="/">去上传</a></div>';
+        document.getElementById('loadingArea').style.display = 'block';
+        return;
+      }
+      document.getElementById('analysisResults').style.display = 'block';
+      document.getElementById('btnReport').style.display = 'inline-block';
+
+      const sum = data.audit_summary;
+      const riskLabel = {high:'高风险',medium:'中风险',low:'低风险'};
+      let resHtml = '';
+      resHtml += '<div class="metric-card accent"><div class="metric-value">' + sum.total_rules + '</div><div class="metric-label">审计规则</div></div>';
+      resHtml += '<div class="metric-card danger"><div class="metric-value">' + sum.high_risk + '</div><div class="metric-label">高风险</div></div>';
+      resHtml += '<div class="metric-card warn"><div class="metric-value">' + sum.medium_risk + '</div><div class="metric-label">中风险</div></div>';
+      resHtml += '<div class="metric-card ok"><div class="metric-value">' + sum.low_risk + '</div><div class="metric-label">低风险</div></div>';
+      document.getElementById('resCards').innerHTML = resHtml;
+
+      const riskBadge = {high:'danger',medium:'warning',low:'success',unknown:'secondary'};
+      let ruleHtml = '';
+      data.audit_results.forEach(r => {
+        const icon = r.suspicious ? 'exclamation-triangle-fill text-warning' : 'check-circle-fill text-success';
+        ruleHtml += '<div class="col-lg-6 mb-3"><div class="panel rule-card h-100 ' + (r.suspicious ? 'suspicious' : '') + '"><div class="panel-header"><span><span class="rule-status ' + (r.suspicious ? 'warn' : 'ok') + ' me-2"></span><strong>' + r.name + '</strong></span><span class="badge bg-' + (riskBadge[r.risk]||'secondary') + '">' + (riskLabel[r.risk]||'--') + '</span></div><div class="panel-body"><p class="mb-0">' + (r.description || r.error || r.warning || '--') + '</p></div></div></div>';
+      });
+      document.getElementById('ruleCards').innerHTML = ruleHtml;
+
+      let anomHtml = '';
+      const detectors = data.anomaly_results.detectors || {};
+      for (const [key, d] of Object.entries(detectors)) {
+        if (d.error) {
+          anomHtml += '<div class="col-lg-4 mb-3"><div class="panel"><div class="panel-header">' + (d.name||key) + '</div><div class="panel-body text-danger">' + d.error + '</div></div></div>';
+        } else {
+          const pct = d.anomaly_pct || 0;
+          const color = pct > 10 ? 'danger' : (pct > 3 ? 'warn' : 'ok');
+          anomHtml += '<div class="col-lg-4 mb-3"><div class="panel"><div class="panel-header"><strong>' + (d.name||key) + '</strong></div><div class="panel-body"><div class="metric-value text-' + color + '">' + (d.anomaly_count||0) + '</div><p class="text-muted mb-0">异常值 / ' + (d.total_records||0).toLocaleString() + ' 条 (' + pct + '%)</p></div></div></div>';
+        }
+      }
+      document.getElementById('anomalyCards').innerHTML = anomHtml;
+    })
+    .catch(err => {
+      document.getElementById('loadingArea').innerHTML = '<div class="alert alert-danger text-center">分析失败: ' + err.message + '</div>';
+    });
+}
+</script>
+{% endblock %}

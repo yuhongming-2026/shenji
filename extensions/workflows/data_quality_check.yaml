@@ -1,0 +1,19 @@
+# 数据质量检查 — 自动检测数据完整性和一致性
+id: data_quality_check
+name: 数据质量检查
+description: 自动检测当前数据的完整性、一致性和异常值
+version: "1.0"
+steps:
+  - type: agent
+    name: 数据质量评估
+    prompt: |
+      对当前已加载的审计数据进行全面的数据质量检查：
+      1. 检查是否缺失值、重复行
+      2. 检查金额列是否有负值或极端值
+      3. 检查日期列是否有异常日期
+      4. 检查凭证号是否连续
+      5. 给出数据质量评分（0-100）和改善建议
+
+      请先使用 get_table_summary 和 get_audit_context 获取当前数据状态，
+      然后使用 run_audit_analysis 运行分析。
+    max_steps: 5

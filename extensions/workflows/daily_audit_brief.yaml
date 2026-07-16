@@ -1,0 +1,12 @@
+id: daily_audit_brief
+name: 每日审计简报
+description: 自动拉取审计上下文 → Skill 汇总 → Agent 生成简报
+version: "1.0"
+steps:
+  - type: skill
+    skill: audit_helper
+    args:
+      focus: summary
+  - type: agent
+    prompt: 根据上一步审计数据，生成一份简洁的每日审计简报（风险点、建议、待办），用中文 Markdown 格式。
+    max_steps: 3

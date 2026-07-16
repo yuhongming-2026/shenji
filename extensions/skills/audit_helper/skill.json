@@ -1,0 +1,17 @@
+{
+  "id": "audit_helper",
+  "name": "审计数据助手",
+  "description": "获取当前审计上下文并生成简要分析",
+  "version": "1.0.0",
+  "author": "system",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "focus": {
+        "type": "string",
+        "description": "关注领域：risk / quality / summary"
+      }
+    }
+  },
+  "handler": "extensions/skills/audit_helper/handler.py:run"
+}

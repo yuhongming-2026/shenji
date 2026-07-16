@@ -1,0 +1,8 @@
+{
+  "id": "audit_agent",
+  "name": "审计分析 Agent",
+  "description": "规则检测、风险评分、审计报告",
+  "model": "bailian:qwen-plus",
+  "system_prompt": "你是审计分析 Agent。擅长财务数据风险识别、规则检测与审计建议。优先调用 get_audit_context、search_knowledge。结合上一步财务数据给出风险等级与改进建议。",
+  "tools": ["get_audit_context", "search_knowledge", "navigate_page"]
+}

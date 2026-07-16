@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+uploads/*
+!uploads/.gitkeep
+data/*
+!data/.gitkeep
+!data/models/
+!data/models/README.md
+!data/models/inference_policy.json
+data/.secret_key
+shared_files/*
+.env
+*.log
+*.safetensors
+*.safetensors.part-*

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}银行对账{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0"><i class="bi bi-bank"></i> 银行对账</h4>
+  <button class="btn btn-sm btn-primary" onclick="runRecon()"><i class="bi bi-check2-all"></i> 执行对账</button>
+</div>
+<div class="row g-3 mb-3" id="bankCards"></div>
+<div class="card border-0 shadow-sm mb-3"><div class="card-header bg-transparent d-flex justify-content-between">
+  <strong>银行流水</strong>
+  <button class="btn btn-sm btn-outline-secondary" onclick="importSample()">导入示例流水</button>
+</div><div class="card-body p-0">
+<table class="table table-sm mb-0"><thead><tr><th>日期</th><th>摘要</th><th class="text-end">金额</th><th>匹配</th></tr></thead>
+<tbody id="txnBody"><tr><td colspan="4" class="text-center py-3 text-muted">请选择账户</td></tr></tbody></table>
+</div></div>
+<div id="reconResult" class="alert" style="display:none"></div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+let bankId = null;
+document.addEventListener('DOMContentLoaded', loadBanks);
+function loadBanks() {
+  fetch('/api/finance/bank/accounts').then(r=>r.json()).then(d => {
+    const cards = document.getElementById('bankCards');
+    const list = d.accounts || [];
+    if (!list.length) { cards.innerHTML = '<div class="col-12 text-muted">暂无银行账户</div>'; return; }
+    bankId = list[0].id;
+    cards.innerHTML = list.map((b,i) => `<div class="col-md-4"><div class="card border-0 shadow-sm ${i===0?'border-primary':''}" style="cursor:pointer" onclick="selectBank(${b.id},this)">
+      <div class="card-body"><div class="small text-muted">${b.bank_name}</div><div>${b.account_no}</div>
+      <div class="mt-2"><strong>账面余额 ${formatCurrency(b.book_balance)}</strong></div></div></div></div>`).join('');
+    loadTxns();
+  });
+}
+function selectBank(id, el) { bankId = id; document.querySelectorAll('#bankCards .card').forEach(c=>c.classList.remove('border-primary')); el.classList.add('border-primary'); loadTxns(); }
+function loadTxns() {
+  if (!bankId) return;
+  fetch(`/api/finance/bank/${bankId}/txns`).then(r=>r.json()).then(d => {
+    document.getElementById('txnBody').innerHTML = (d.txns||[]).map(t => `<tr>
+      <td>${t.txn_date}</td><td>${t.summary||''}</td>
+      <td class="text-end ${t.direction==='in'?'text-success':'text-danger'}">${t.direction==='in'?'+':'-'}${formatCurrency(t.amount)}</td>
+      <td>${t.matched?'已匹配':'未匹配'}</td></tr>`).join('') || '<tr><td colspan="4" class="text-center text-muted py-3">暂无流水，可导入</td></tr>';
+  });
+}
+function importSample() {
+  if (!bankId) return;
+  const today = new Date().toISOString().slice(0,10);
+  fetch(`/api/finance/bank/${bankId}/import`, { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ txns: [
+      { txn_date: today, summary: '客户货款', amount: 5000 },
+      { txn_date: today, summary: '办公采购', amount: -800 },
+    ]}) }).then(r=>r.json()).then(d => { if(d.success){ showToast('已导入 '+d.imported+' 条','success'); loadTxns(); }});
+}
+function runRecon() {
+  if (!bankId) return;
+  fetch(`/api/finance/bank/${bankId}/reconcile`, { method:'POST' }).then(r=>r.json()).then(d => {
+    const el = document.getElementById('reconResult');
+    el.style.display = 'block';
+    el.className = 'alert ' + (d.balanced ? 'alert-success' : 'alert-warning');
+    el.innerHTML = `账面 ${formatCurrency(d.book_balance)} · 银行 ${formatCurrency(d.bank_balance)} · 差异 ${formatCurrency(d.diff_amount)} · 未匹配 ${d.unmatched_count} 笔`;
+  });
+}
+</script>
+{% endblock %}

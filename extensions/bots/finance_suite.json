@@ -1,0 +1,23 @@
+{
+  "id": "finance_suite",
+  "name": "财务全流程 Bot",
+  "description": "Coze 式编排：财务 Agent → 审计 Agent → 汇总回复，可跳转页面",
+  "agents": [
+    {
+      "agent": "finance_agent",
+      "prompt": "用户问题：{{input}}",
+      "handoff": "你是第一个节点，负责查账、发票、应收应付与银行对账，输出关键数据摘要。",
+      "max_steps": 2
+    },
+    {
+      "agent": "audit_agent",
+      "handoff": "你是第二个节点，基于财务 Agent 的结果做审计风险点评与建议。",
+      "max_steps": 2
+    },
+    {
+      "agent": "office_assistant",
+      "handoff": "你是最终节点，整合前两步结论，给出可执行建议；如需打开页面请 navigate_page。",
+      "max_steps": 2
+    }
+  ]
+}

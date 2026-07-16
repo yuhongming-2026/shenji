@@ -1,0 +1,75 @@
+# AI 模型配置 — 仅通过 API 接入（不再使用本地 Qwen 权重）
+default: bailian:qwen-plus
+
+models:
+  - id: bailian:qwen-plus
+    name: 通义千问 Plus（百炼）
+    provider: openai_compat
+    model: qwen-plus
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key_env: BAILIAN_API_KEY
+    description: 阿里百炼 Qwen-Plus，性价比高，适合日常审计分析
+
+  - id: bailian:qwen-max
+    name: 通义千问 Max（百炼）
+    provider: openai_compat
+    model: qwen-max
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key_env: BAILIAN_API_KEY
+    description: 阿里百炼 Qwen-Max，适合复杂审计推理
+
+  - id: bailian:qwen-turbo
+    name: 通义千问 Turbo（百炼）
+    provider: openai_compat
+    model: qwen-turbo
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key_env: BAILIAN_API_KEY
+    description: 阿里百炼 Qwen-Turbo，速度最快
+
+  - id: bailian:qwen-vl-plus
+    name: 通义千问 VL Plus（百炼·视觉）
+    provider: openai_compat
+    model: qwen-vl-plus
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key_env: BAILIAN_API_KEY
+    description: 多模态视觉模型，支持图片/发票 OCR
+
+  - id: bailian:dashscope-qwen-plus
+    name: 通义千问 Plus（DashScope原生）
+    provider: dashscope
+    model: qwen-plus
+    base_url: https://dashscope.aliyuncs.com/api/v1
+    api_key_env: BAILIAN_API_KEY
+    description: DashScope 原生协议
+
+  - id: deepseek:chat
+    name: DeepSeek Chat
+    provider: openai_compat
+    model: deepseek-chat
+    base_url: https://api.deepseek.com/v1
+    api_key_env: DEEPSEEK_API_KEY
+    description: DeepSeek 云端模型
+
+  - id: openai:gpt-4o-mini
+    name: OpenAI GPT-4o Mini
+    provider: openai_compat
+    model: gpt-4o-mini
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    description: OpenAI 官方轻量模型
+
+  - id: openai:gpt-4o
+    name: OpenAI GPT-4o
+    provider: openai_compat
+    model: gpt-4o
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    description: OpenAI 官方旗舰模型
+
+  - id: custom:openai-compat
+    name: 自定义 OpenAI 兼容端点
+    provider: openai_compat
+    model: your-model-name
+    base_url: http://localhost:11434/v1
+    api_key_env: CUSTOM_API_KEY
+    description: Ollama / vLLM / LM Studio 等 OpenAI 兼容 API

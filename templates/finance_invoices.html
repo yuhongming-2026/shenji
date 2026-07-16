@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}发票管理{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h4 class="mb-0"><i class="bi bi-receipt"></i> 发票管理</h4>
+  <div class="btn-group btn-group-sm">
+    <button class="btn btn-outline-primary active" onclick="filterInv('')">全部</button>
+    <button class="btn btn-outline-primary" onclick="filterInv('ar')">应收</button>
+    <button class="btn btn-outline-primary" onclick="filterInv('ap')">应付</button>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#invModal">新建发票</button>
+  </div>
+</div>
+<div class="card border-0 shadow-sm"><div class="card-body p-0">
+<table class="table table-hover mb-0"><thead>
+<tr><th>发票号</th><th>类型</th><th>往来单位</th><th>日期</th><th class="text-end">金额</th><th>状态</th><th></th></tr>
+</thead><tbody id="invBody"><tr><td colspan="7" class="text-center py-4">加载中…</td></tr></tbody></table>
+</div></div>
+<div class="modal fade" id="invModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">新建发票</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">
+  <div class="mb-2"><label class="form-label">类型</label>
+    <select class="form-select" id="invType"><option value="ar">应收（销项）</option><option value="ap">应付（进项）</option></select></div>
+  <div class="mb-2"><label class="form-label">往来单位</label><select class="form-select" id="invPartner"></select></div>
+  <div class="mb-2"><label class="form-label">金额</label><input type="number" class="form-control" id="invAmount" step="0.01"></div>
+  <div class="mb-2"><label class="form-label">摘要</label><input class="form-control" id="invSummary"></div>
+</div>
+<div class="modal-footer"><button class="btn btn-primary" onclick="saveInvoice()">保存</button></div>
+</div></div></div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+let invFilter = new URLSearchParams(location.search).get('type') || '';
+let partners = [];
+document.addEventListener('DOMContentLoaded', () => {
+  if (invFilter) document.getElementById('invType').value = invFilter;
+  loadPartners(); loadInvoices();
+});
+function filterInv(t) { invFilter = t; loadInvoices(); }
+function loadPartners() {
+  fetch('/api/finance/partners').then(r=>r.json()).then(d => {
+    partners = d.partners || [];
+    document.getElementById('invPartner').innerHTML = partners.map(p =>
+      `<option value="${p.id}">${p.code} ${p.name} (${p.partner_type})</option>`).join('');
+  });
+}
+function loadInvoices() {
+  const url = invFilter ? `/api/finance/invoices?type=${invFilter}` : '/api/finance/invoices';
+  fetch(url).then(r=>r.json()).then(d => {
+    const body = document.getElementById('invBody');
+    body.innerHTML = (d.invoices||[]).map(i => `<tr>
+      <td>${i.invoice_no}</td><td>${i.invoice_type==='ar'?'应收':'应付'}</td>
+      <td>${i.partner_name||'-'}</td><td>${i.invoice_date}</td>
+      <td class="text-end">${formatCurrency(i.amount)}</td>
+      <td><span class="badge bg-${i.status==='paid'?'success':i.status==='partial'?'warning':'secondary'}">${i.status}</span></td>
+      <td>${i.status!=='paid'?`<button class="btn btn-sm btn-outline-success" onclick="payInv(${i.id},${i.amount-i.paid_amount})">收款/付款</button>`:''}</td>
+    </tr>`).join('') || '<tr><td colspan="7" class="text-center text-muted py-4">暂无发票</td></tr>';
+  });
+}
+function saveInvoice() {
+  const type = document.getElementById('invType').value;
+  fetch('/api/finance/invoices', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ invoice_type: type, partner_id: parseInt(document.getElementById('invPartner').value,10),
+      amount: parseFloat(document.getElementById('invAmount').value), summary: document.getElementById('invSummary').value,
+      lines: [{ item_name: document.getElementById('invSummary').value, amount: parseFloat(document.getElementById('invAmount').value) }] })
+  }).then(r=>r.json()).then(d => { if(d.success){ bootstrap.Modal.getInstance(document.getElementById('invModal')).hide(); showToast('发票已创建','success'); loadInvoices(); } else alert(d.error); });
+}
+function payInv(id, amt) {
+  const v = prompt('请输入本次收付金额', amt);
+  if (!v) return;
+  fetch(`/api/finance/invoices/${id}/pay`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ amount: parseFloat(v) }) })
+    .then(r=>r.json()).then(d => { if(d.success) loadInvoices(); });
+}
+</script>
+{% endblock %}

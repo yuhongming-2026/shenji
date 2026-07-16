@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+{% block title %}消息 - 财务审计工作台{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <div>
+    <h1>消息</h1>
+    <p class="page-desc">与站内任意用户沟通，共享审计文件；同公司同事可直接聊天</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="chat-layout">
+  <div class="chat-sidebar">
+    <div class="chat-sidebar-header d-flex justify-content-between align-items-center">
+      <span>会话列表</span>
+      <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#newChatModal" title="发起新对话">
+        <i class="bi bi-plus-lg"></i>
+      </button>
+    </div>
+    <div id="colleaguesBox" class="px-2 pt-2" style="display:none">
+      <div class="small text-muted mb-1"><i class="bi bi-building"></i> 同公司同事</div>
+      <div id="colleaguesList" class="mb-2"></div>
+    </div>
+    <div id="conversationList">
+      <div class="text-center text-muted py-3">加载中...</div>
+    </div>
+  </div>
+
+  <div class="chat-main">
+    <div id="chatHeader" class="chat-main-header">
+      <span class="text-muted">选择一个会话开始聊天</span>
+    </div>
+    <div id="chatMessages" class="chat-messages" style="display:none"></div>
+    <div id="sharedFilesArea" class="border-top pt-2 px-3" style="display:none;max-height:150px;overflow-y:auto">
+      <small class="text-muted"><i class="bi bi-folder-symlink"></i> 共享文件</small>
+      <div id="sharedFilesList"></div>
+    </div>
+    <div id="chatInputArea" class="chat-input-bar" style="display:none">
+      <div class="chat-call-toolbar mb-2" id="chatCallToolbar" style="display:none">
+        <button type="button" class="btn btn-sm btn-primary" id="btnVideoCall" onclick="startVideoCall(currentChatUserId)">
+          <i class="bi bi-camera-video-fill"></i> 发起视频通话
+        </button>
+        <span class="small text-muted ms-2">与对方实时视频沟通（需摄像头权限）</span>
+      </div>
+      <div class="input-group">
+        <label class="btn btn-outline-secondary" for="fileInput" title="发送文件">
+          <i class="bi bi-paperclip"></i>
+        </label>
+        <input type="file" id="fileInput" style="display:none" onchange="sendFile()">
+        <button type="button" class="btn btn-outline-secondary" id="btnVoice" title="按住说话 / 点击开始录音" onmousedown="startVoiceRecord(event)" onmouseup="stopVoiceRecord()" onmouseleave="stopVoiceRecord()" ontouchstart="startVoiceRecord(event)" ontouchend="stopVoiceRecord()">
+          <i class="bi bi-mic-fill" id="voiceIcon"></i>
+        </button>
+        <input type="text" id="chatMessageInput" class="form-control" placeholder="输入消息..." onkeypress="if(event.key==='Enter')sendChatMessage()">
+        <button class="btn btn-primary" onclick="sendChatMessage()"><i class="bi bi-send"></i> 发送</button>
+      </div>
+      <div id="voiceHint" class="mt-1 small text-muted" style="display:none">正在录音…松开结束并发送</div>
+      <div id="fileProgress" class="mt-1 small text-muted" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="newChatModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-chat-dots"></i> 发起新对话</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted">同公司同事已自动成为好友；也可搜索站内任意用户发消息。</p>
+        <div id="modalColleagues" class="list-group mb-3"></div>
+        <div class="input-group mb-3">
+          <input type="text" id="newChatSearch" class="form-control" placeholder="输入用户名搜索…" onkeypress="if(event.key==='Enter')searchChatUsers()">
+          <button type="button" class="btn btn-primary" onclick="searchChatUsers()"><i class="bi bi-search"></i></button>
+        </div>
+        <div id="newChatResults" class="list-group"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let currentChatUser = null;
+let currentChatUserId = null;
+let voiceRecorder = null;
+let voiceChunks = [];
+let voiceRecording = false;
+
+document.addEventListener('DOMContentLoaded', function() {
+  loadConversations();
+  loadColleagues();
+  setInterval(loadConversations, 5000);
+  window.onNewChatMessages = function(msgs) {
+    if (!currentChatUserId) return;
+    const relevant = msgs.filter(m => m.sender_id === currentChatUserId);
+    if (relevant.length) loadMessages();
+  };
+  const params = new URLSearchParams(window.location.search);
+  const user = params.get('user');
+  const uid = params.get('id');
+  if (user && uid) {
+    const peerId = parseInt(uid, 10);
+    if (peerId !== window.__currentUserId) {
+      openChat(user, peerId);
+    } else {
+      showToast('无法与自己对话', 'warning');
+    }
+  } else if (user) {
+    fetch(`/api/users/search?q=${encodeURIComponent(user)}`, { credentials: 'same-origin' })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.users.length) {
+          const u = d.users.find(x => x.username === user) || d.users[0];
+          openChat(u.username, u.id);
+        }
+      });
+  }
+});
+
+function loadColleagues() {
+  fetch('/api/colleagues', { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(d => {
+      const box = document.getElementById('colleaguesBox');
+      const list = document.getElementById('colleaguesList');
+      const modalList = document.getElementById('modalColleagues');
+      if (!d.success || !d.colleagues.length) {
+        if (box) box.style.display = 'none';
+        if (modalList) modalList.innerHTML = '';
+        return;
+      }
+      if (box) box.style.display = 'block';
+      const html = d.colleagues.map(u => `
+        <button type="button" class="btn btn-sm btn-outline-secondary me-1 mb-1"
+          onclick='openChat(${JSON.stringify(u.username)}, ${u.id})'>
+          <i class="bi bi-person-check"></i> ${escapeChatHtml(u.username)}
+        </button>`).join('');
+      if (list) list.innerHTML = html;
+      if (modalList) {
+        modalList.innerHTML = d.colleagues.map(u => `
+          <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+            onclick='startChatWith(${u.id}, ${JSON.stringify(u.username)})'>
+            <span><i class="bi bi-building me-2"></i>${escapeChatHtml(u.username)} <small class="text-muted">同公司</small></span>
+            <span class="badge bg-success">直接聊</span>
+          </button>`).join('');
+      }
+    });
+}
+
+function searchChatUsers() {
+  const q = document.getElementById('newChatSearch')?.value?.trim();
+  const box = document.getElementById('newChatResults');
+  if (!q || !box) return;
+  fetch(`/api/users/search?q=${encodeURIComponent(q)}`, { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success || !d.users.length) {
+        box.innerHTML = '<div class="text-muted small py-2">未找到用户</div>';
+        return;
+      }
+      box.innerHTML = d.users.map(u => `
+        <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+          onclick='startChatWith(${u.id}, ${JSON.stringify(u.username)})'>
+          <span><i class="bi bi-person-circle me-2"></i>${escapeChatHtml(u.username)}</span>
+          <span class="badge bg-primary">发消息</span>
+        </button>
+      `).join('');
+    });
+}
+
+function startChatWith(userId, username) {
+  bootstrap.Modal.getInstance(document.getElementById('newChatModal'))?.hide();
+  openChat(username, userId);
+}
+
+function loadConversations() {
+  fetch('/api/messages/conversations', { credentials: 'same-origin' })
+    .then(r => r.json()).then(d => {
+      const el = document.getElementById('conversationList');
+      if (!d.success || !d.conversations.length) {
+        el.innerHTML = '<div class="text-center text-muted py-3">暂无会话<br><small>点击右上角 + 搜索用户或选择同公司同事</small></div>';
+        return;
+      }
+      el.innerHTML = d.conversations.map(c => `
+        <div class="conversation-item ${c.other_id === currentChatUserId ? 'active' : ''}"
+             onclick="openChat('${c.username}', ${c.other_id})" style="cursor:pointer">
+          <div class="d-flex align-items-center">
+            <span class="user-avatar me-2" style="width:28px;height:28px;font-size:11px">${c.username[0].toUpperCase()}</span>
+            <div class="flex-grow-1">
+              <strong>${c.username}</strong>
+              ${c.unread > 0 ? `<span class="badge bg-danger ms-1">${c.unread}</span>` : ''}
+              <br><small class="text-muted text-truncate d-block" style="max-width:180px">${c.last_msg||''}</small>
+            </div>
+            <small class="text-muted">${c.last_time||''}</small>
+          </div>
+        </div>
+      `).join('');
+    })
+    .catch(() => {
+      const el = document.getElementById('conversationList');
+      if (el) el.innerHTML = '<div class="text-center text-danger py-3">加载失败，请刷新页面重试</div>';
+    });
+}
+
+function openChat(username, userId) {
+  if (!userId || userId === window.__currentUserId) {
+    showToast('无法与自己对话', 'warning');
+    return;
+  }
+  currentChatUser = username;
+  currentChatUserId = userId;
+  window.__chatPeerId = userId;
+  if (typeof updateCallButtons === 'function') updateCallButtons(username, userId);
+  const callToolbar = document.getElementById('chatCallToolbar');
+  if (callToolbar) callToolbar.style.display = (window.__enableVideoCall && userId) ? 'flex' : 'none';
+  document.getElementById('chatHeader').innerHTML = `<strong>${escapeChatHtml(username)}</strong>`;
+  document.getElementById('chatMessages').style.display = 'block';
+  document.getElementById('chatInputArea').style.display = 'block';
+  document.getElementById('sharedFilesArea').style.display = 'block';
+  document.getElementById('chatMessages').innerHTML = '<div class="text-center text-muted py-3">加载消息...</div>';
+  document.getElementById('chatMessageInput').focus();
+  loadConversations();
+  loadMessages();
+  loadSharedFiles();
+}
+
+function loadMessages() {
+  if (!currentChatUserId) return;
+  fetch(`/api/messages/with/${currentChatUserId}`, { credentials: 'same-origin' })
+    .then(r => r.json()).then(d => {
+      if (!d.success) return;
+      const el = document.getElementById('chatMessages');
+      if (!d.messages.length) {
+        el.innerHTML = '<div class="text-center text-muted py-5">暂无消息，开始聊天吧！</div>';
+        return;
+      }
+      el.innerHTML = d.messages.map(m => {
+        const isMe = m.sender_id !== currentChatUserId;
+        const body = (m.msg_type === 'voice' && m.media_url)
+          ? `<div class="d-flex align-items-center gap-2"><i class="bi bi-mic-fill"></i><audio controls preload="metadata" src="${escapeChatHtml(m.media_url)}" style="max-width:220px;height:32px"></audio></div>`
+          : formatMessageContent(m.content, isMe);
+        return `<div class="mb-2 ${isMe ? 'text-end' : ''}">
+          <div class="d-inline-block p-2 rounded ${isMe ? 'bg-primary text-white' : 'bg-light border'}" style="max-width:70%">
+            ${body}
+          </div>
+          <br><small class="text-muted">${m.created_at||''}</small>
+        </div>`;
+      }).join('');
+      el.scrollTop = el.scrollHeight;
+    });
+}
+
+function formatMessageContent(content, isMe) {
+  if (!content) return '';
+  const collabMatch = content.match(/\[collab:([^:\]]+):([^\]]+)\]/);
+  let text = content;
+  let card = '';
+  if (collabMatch) {
+    const token = collabMatch[1];
+    const title = collabMatch[2];
+    text = content.replace(/\[collab:[^\]]+\]/, '').trim();
+    card = `<div class="collab-invite-card mt-2 ${isMe ? 'collab-invite-card-me' : ''}">
+      <div><i class="bi bi-people-fill"></i> <strong>协同编辑</strong></div>
+      <div class="small">${escapeChatHtml(title)}</div>
+      <a href="/edit?collab=${encodeURIComponent(token)}" class="btn btn-sm ${isMe ? 'btn-light' : 'btn-primary'} mt-2">
+        <i class="bi bi-pencil-square"></i> 加入协同编辑
+      </a>
+    </div>`;
+  }
+  return escapeChatHtml(text) + card;
+}
+
+function escapeChatHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
+}
+
+function loadSharedFiles() {
+  if (!currentChatUserId) return;
+  Promise.all([
+    fetch('/api/files/received').then(r => r.json()),
+    fetch('/api/files/sent').then(r => r.json())
+  ]).then(([received, sent]) => {
+    const allFiles = [];
+    if (received.success) allFiles.push(...received.files.map(f => ({...f, direction:'received'})));
+    if (sent.success) allFiles.push(...sent.files.map(f => ({...f, direction:'sent'})));
+    const relevant = allFiles.filter(f =>
+      (f.direction === 'received' && f.sender_id === currentChatUserId) ||
+      (f.direction === 'sent' && f.receiver_id === currentChatUserId)
+    );
+    const el = document.getElementById('sharedFilesList');
+    if (!relevant.length) {
+      el.innerHTML = '<div class="text-muted small py-1">暂无共享文件</div>';
+    } else {
+      el.innerHTML = relevant.map(f => {
+        const isImage = ['png','jpg','jpeg','gif','webp','bmp'].includes(f.file_type);
+        const isVideo = ['mp4','webm','avi','mov','mkv'].includes(f.file_type);
+        let previewHtml = '';
+        if (isImage) {
+          previewHtml = `<img src="/api/files/${f.id}/download" class="me-2 rounded" style="width:40px;height:40px;object-fit:cover;cursor:pointer" onclick="window.open('/api/files/${f.id}/download')" title="点击查看大图">`;
+        } else if (isVideo) {
+          previewHtml = `<i class="bi bi-play-btn-fill text-primary me-2 fs-5" style="cursor:pointer" onclick="previewVideo('/api/files/${f.id}/download','${f.original_name}')" title="点击播放"></i>`;
+        }
+        return `<div class="d-flex align-items-center py-1 border-bottom small">
+          ${previewHtml || `<i class="bi ${getFileIcon(f.file_type)} me-2"></i>`}
+          <span class="flex-grow-1 text-truncate" style="max-width:250px">${f.original_name}</span>
+          <small class="text-muted me-2">${formatFileSize(f.file_size)}</small>
+          <a href="/api/files/${f.id}/download" class="btn btn-outline-primary btn-sm" title="下载"><i class="bi bi-download"></i></a>
+        </div>`;
+      }).join('');
+    }
+  });
+}
+
+function getFileIcon(ext) {
+  const map = {pdf:'bi-file-pdf', xlsx:'bi-file-excel', xls:'bi-file-excel', csv:'bi-file-text', docx:'bi-file-word', doc:'bi-file-word', png:'bi-file-image', jpg:'bi-file-image', jpeg:'bi-file-image', zip:'bi-file-zip', rar:'bi-file-zip'};
+  return map[ext] || 'bi-file-earmark';
+}
+
+function formatFileSize(bytes) {
+  if (!bytes) return '0 B';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/(1024*1024)).toFixed(1) + ' MB';
+}
+
+function sendChatMessage() {
+  const input = document.getElementById('chatMessageInput');
+  const msg = input.value.trim();
+  if (!msg || !currentChatUserId) return;
+  fetch('/api/messages/send', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    credentials: 'same-origin',
+    body: JSON.stringify({receiver_id: currentChatUserId, content: msg})
+  }).then(r => r.json()).then(d => {
+    if (d.success) { input.value = ''; loadMessages(); loadConversations(); }
+    else showToast(d.error, 'error');
+  });
+}
+
+async function startVoiceRecord(e) {
+  if (e) e.preventDefault();
+  if (!currentChatUserId || voiceRecording) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    voiceChunks = [];
+    const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+    voiceRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    voiceRecorder.ondataavailable = ev => { if (ev.data.size) voiceChunks.push(ev.data); };
+    voiceRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(voiceChunks, { type: voiceRecorder.mimeType || 'audio/webm' });
+      if (blob.size < 200) {
+        showToast('录音太短', 'warning');
+        return;
+      }
+      uploadVoice(blob);
+    };
+    voiceRecorder.start();
+    voiceRecording = true;
+    document.getElementById('voiceHint').style.display = 'block';
+    document.getElementById('btnVoice')?.classList.add('btn-danger');
+    document.getElementById('voiceIcon')?.classList.replace('bi-mic-fill', 'bi-mic-mute-fill');
+  } catch (err) {
+    showToast('无法使用麦克风: ' + err.message, 'error');
+  }
+}
+
+function stopVoiceRecord() {
+  if (!voiceRecording || !voiceRecorder) return;
+  voiceRecording = false;
+  document.getElementById('voiceHint').style.display = 'none';
+  document.getElementById('btnVoice')?.classList.remove('btn-danger');
+  document.getElementById('voiceIcon')?.classList.replace('bi-mic-mute-fill', 'bi-mic-fill');
+  if (voiceRecorder.state !== 'inactive') voiceRecorder.stop();
+}
+
+function uploadVoice(blob) {
+  const fd = new FormData();
+  fd.append('audio', blob, 'voice.webm');
+  fd.append('receiver_id', currentChatUserId);
+  fetch('/api/messages/send-voice', { method: 'POST', body: fd, credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(d => {
+      if (d.success) { loadMessages(); loadConversations(); }
+      else showToast(d.error || '语音发送失败', 'error');
+    })
+    .catch(err => showToast('语音发送失败: ' + err.message, 'error'));
+}
+
+function sendFile() {
+  const input = document.getElementById('fileInput');
+  if (!input.files.length || !currentChatUserId) return;
+  const file = input.files[0];
+  const progress = document.getElementById('fileProgress');
+  progress.style.display = 'block';
+  progress.textContent = `正在发送 ${file.name}...`;
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('receiver_id', currentChatUserId);
+
+  fetch('/api/files/send', {method:'POST', body: formData})
+    .then(r => r.json()).then(d => {
+      progress.style.display = 'none';
+      input.value = '';
+      if (d.success) {
+        showToast(`文件 "${d.file_name}" 已发送`, 'success');
+        loadSharedFiles();
+      } else {
+        showToast(d.error, 'error');
+      }
+    }).catch(err => {
+      progress.style.display = 'none';
+      showToast('发送失败: ' + err.message, 'error');
+    });
+}
+
+function previewVideo(url, name) {
+  const modal = document.createElement('div');
+  modal.style.cssContent = '';
+  modal.style.cssText = 'position:fixed;top:0;left:0;z-index:99999;width:100%;height:100%;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;flex-direction:column';
+  modal.innerHTML = `
+    <div style="color:#fff;margin-bottom:10px;font-size:16px">${name}</div>
+    <video controls autoplay style="max-width:90%;max-height:70vh" src="${url}"></video>
+    <button style="margin-top:15px;padding:8px 30px;border-radius:8px;border:none;background:#ef4444;color:#fff;cursor:pointer" onclick="this.parentElement.remove()">关闭</button>
+  `;
+  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+  document.body.appendChild(modal);
+}
+
+setInterval(() => { if (currentChatUserId) loadMessages(); }, 3000);
+</script>
+{% endblock %}

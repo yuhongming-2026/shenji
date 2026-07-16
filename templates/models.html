@@ -1,0 +1,379 @@
+{% extends "base.html" %}
+{% block title %}AI 模型管理{% endblock %}
+
+{% block extra_head %}
+<style>
+.model-card { border:2px solid var(--ink); padding:16px; margin-bottom:10px; background:#fff; transition:.12s; box-shadow:var(--shadow-sm); }
+.model-card:hover { border-color:var(--accent); }
+.model-card.available { border-left:6px solid var(--green); }
+.model-card.unavailable { border-left:6px solid #ccc; opacity:.75; }
+.model-card.discovered { border-left:6px solid var(--blue); }
+.model-badge { display:inline-block; padding:2px 8px; border:1px solid var(--ink); font-size:11px; font-weight:700; text-transform:uppercase; }
+.badge-available { background:var(--green-soft); color:var(--green); }
+.badge-unavailable { background:#eee; color:#888; }
+.badge-local { background:var(--blue-soft); color:var(--blue); }
+.badge-cloud { background:var(--purple-soft); color:var(--purple); }
+.badge-dashscope { background:#fff3e0; color:#e65100; }
+.badge-openai { background:#e8f5e9; color:#2e7d32; }
+.upload-zone { border:3px dashed var(--accent); padding:40px; text-align:center; cursor:pointer; transition:.15s; background:var(--accent-soft); }
+.upload-zone:hover { border-color:var(--ink); background:#fff; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-cpu"></i> AI 模型管理</h1>
+    <p class="page-desc">管理所有 AI 模型 — 配置 API Key、上传本地模型、自动发现端点</p>
+  </div>
+  <div class="d-flex gap-2">
+    <button type="button" class="btn btn-primary btn-sm" onclick="scanLocalModels()">
+      <i class="bi bi-search"></i> 自动扫描
+    </button>
+    <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModelModal">
+      <i class="bi bi-plus-lg"></i> 添加模型
+    </button>
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="location.reload()">
+      <i class="bi bi-arrow-clockwise"></i> 刷新
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-8">
+    <!-- 模型列表 -->
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong><i class="bi bi-grid"></i> 已配置模型</strong>
+        <span class="small text-muted" id="modelCount">加载中…</span>
+      </div>
+      <div class="card-body" id="modelList">
+        <div class="text-center text-muted py-4">加载中…</div>
+      </div>
+    </div>
+
+    <!-- 发现的本地模型 -->
+    <div class="card mb-3" id="discoveredSection" style="display:none">
+      <div class="card-header"><strong><i class="bi bi-search"></i> 发现的本地端点</strong></div>
+      <div class="card-body" id="discoveredList"></div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <!-- API Key 快速设置 -->
+    <div class="card mb-3">
+      <div class="card-header"><strong><i class="bi bi-key"></i> API Key 快速设置</strong></div>
+      <div class="card-body">
+        <div class="mb-2">
+          <label class="form-label small">DeepSeek API Key</label>
+          <input type="password" id="apikeyDeepseek" class="form-control form-control-sm" placeholder="sk-...">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small">OpenAI API Key</label>
+          <input type="password" id="apikeyOpenai" class="form-control form-control-sm" placeholder="sk-...">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small">自定义 API Key（Ollama 等）</label>
+          <input type="password" id="apikeyCustom" class="form-control form-control-sm" placeholder="可选">
+        </div>
+        <button type="button" class="btn btn-sm btn-primary w-100" onclick="saveAllApiKeys()">
+          <i class="bi bi-check-lg"></i> 全部保存
+        </button>
+        <div id="apikeyMsg" class="small mt-2"></div>
+      </div>
+    </div>
+
+    <!-- 上传模型文件 -->
+    <div class="card mb-3">
+      <div class="card-header"><strong><i class="bi bi-upload"></i> 上传模型文件</strong></div>
+      <div class="card-body">
+        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('modelFileInput').click()">
+          <i class="bi bi-cloud-upload" style="font-size:32px;color:var(--accent)"></i>
+          <p class="mb-0 mt-2">点击或拖拽上传</p>
+          <p class="small text-muted">支持 GGUF / ONNX / safetensors / PyTorch 格式</p>
+        </div>
+        <input type="file" id="modelFileInput" style="display:none" accept=".gguf,.onnx,.bin,.pt,.safetensors,.pth" onchange="uploadModelFile()">
+        <div id="uploadProgress" class="small mt-2"></div>
+        <div class="small text-muted mt-2">模型文件保存在 <code>data/models/</code>，可在 <code>config/models.yaml</code> 中引用</div>
+      </div>
+    </div>
+
+    <!-- 设置指南 -->
+    <div class="card">
+      <div class="card-header"><strong><i class="bi bi-question-circle"></i> 设置指南</strong></div>
+      <div class="card-body small">
+        <p class="mb-1"><strong>DeepSeek：</strong></p>
+        <p class="text-muted mb-2">注册 <a href="https://platform.deepseek.com" target="_blank">platform.deepseek.com</a>，点击 API Keys → 创建新的 API Key</p>
+        <p class="mb-1"><strong>OpenAI：</strong></p>
+        <p class="text-muted mb-2">注册 <a href="https://platform.openai.com" target="_blank">platform.openai.com</a> → API Keys → Create new secret key</p>
+        <p class="mb-1"><strong>Ollama（本地）：</strong></p>
+        <p class="text-muted mb-2">安装 <a href="https://ollama.com" target="_blank">Ollama</a>，运行 <code>ollama serve</code>，点击「自动扫描」即可发现</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 添加模型模态框 -->
+<div class="modal fade" id="addModelModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-plus-lg"></i> 添加模型</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">模型 ID</label>
+          <input type="text" class="form-control" id="newModelId" placeholder="例如: my-company:gpt-4">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">模型名称</label>
+          <input type="text" class="form-control" id="newModelName" placeholder="例如: GPT-4 (自建)">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">提供商类型</label>
+          <select class="form-select" id="newModelProvider">
+            <option value="openai_compat">OpenAI 兼容协议（百炼/DeepSeek/OpenAI/Ollama 通用）</option>
+            <option value="dashscope">阿里百炼 DashScope 原生协议</option>
+            <option value="local">本地模型</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">模型名（API 调用名）</label>
+          <input type="text" class="form-control" id="newModelModel" placeholder="例如: gpt-4o">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Base URL</label>
+          <input type="text" class="form-control" id="newModelBaseUrl" placeholder="例如: https://api.openai.com/v1">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">API Key 环境变量名</label>
+          <input type="text" class="form-control" id="newModelApiKeyEnv" placeholder="例如: MY_API_KEY">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" onclick="addNewModel()">添加</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let modelList = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadModels();
+  loadApiKeys();
+});
+
+// ── 加载模型列表 ──
+
+function loadModels() {
+  fetch('/api/agent/models')
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) return;
+      modelList = d.models || [];
+      renderModels(modelList);
+      document.getElementById('modelCount').textContent = `${modelList.length} 个模型`;
+    });
+}
+
+function renderModels(models) {
+  const el = document.getElementById('modelList');
+  if (!models.length) {
+    el.innerHTML = '<div class="text-center text-muted py-4">暂无模型，请添加或扫描</div>';
+    return;
+  }
+  const permIcons = {read: '📖', write: '✏️', export: '📤', danger: '⚠️'};
+  el.innerHTML = models.map(m => {
+    const availClass = m.available ? 'available' : 'unavailable';
+    const badgeClass = m.available ? 'badge-available' : 'badge-unavailable';
+    const providerBadge = m.provider === 'local' ? 'badge-local' : 'badge-cloud';
+    const providerLabel = m.provider === 'local' ? '本地模型'
+      : (m.provider === 'dashscope' ? 'DashScope原生'
+      : (m.provider === 'openai_compat' ? 'OpenAI兼容' : m.provider));
+    const providerBadgeClass = m.provider === 'local' ? 'badge-local'
+      : (m.provider === 'dashscope' ? 'badge-dashscope'
+      : 'badge-cloud');
+    const discoveredMark = m.auto_discovered ? '<span class="badge bg-info ms-1">自动发现</span>' : '';
+    const defaultMark = m.is_default ? '<span class="badge bg-success ms-1">默认</span>' : '';
+
+    return `
+      <div class="model-card ${availClass} ${m.auto_discovered ? 'discovered' : ''}">
+        <div class="d-flex justify-content-between align-items-start">
+          <div class="flex-grow-1">
+            <strong>${esc(m.name)}</strong>
+            ${defaultMark}${discoveredMark}
+            <div class="small text-muted mt-1">
+              <code>${esc(m.id)}</code>
+              ${m.description ? ' — ' + esc(m.description) : ''}
+            </div>
+          </div>
+          <div class="text-end ms-2">
+            <span class="model-badge ${badgeClass}">${m.available ? '✅ 可用' : '⛔ 未配置'}</span>
+            <br><span class="model-badge ${providerBadgeClass} small mt-1">${providerLabel}</span>
+          </div>
+        </div>
+        ${!m.available && m.provider !== 'local' ? `
+          <div class="mt-2">
+            <input type="password" class="form-control form-control-sm api-key-input" placeholder="输入 API Key..." data-model-id="${esc(m.id)}" onchange="setApiKeyForModel(this)">
+          </div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+// ── API Key 管理 ──
+
+function loadApiKeys() {
+  document.getElementById('apikeyDeepseek').value = '{{ deepseek_key }}';
+  document.getElementById('apikeyOpenai').value = '{{ openai_key }}';
+}
+
+function setApiKeyForModel(input) {
+  const modelId = input.dataset.modelId;
+  const apiKey = input.value.trim();
+  if (!apiKey) return;
+  fetch('/api/agent/models/apikey', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({model_id: modelId, api_key: apiKey}),
+  }).then(r => r.json())
+    .then(d => {
+      if (d.success) {
+        input.style.borderColor = '#2e7d32';
+        setTimeout(() => loadModels(), 500);
+      }
+    });
+}
+
+function saveAllApiKeys() {
+  const keys = [
+    {model: 'deepseek:chat', env: 'DEEPSEEK_API_KEY', val: document.getElementById('apikeyDeepseek').value.trim()},
+    {model: 'openai:gpt-4o-mini', env: 'OPENAI_API_KEY', val: document.getElementById('apikeyOpenai').value.trim()},
+    {model: 'custom:local-api', env: 'CUSTOM_API_KEY', val: document.getElementById('apikeyCustom').value.trim()},
+  ];
+
+  let done = 0;
+  keys.filter(k => k.val).forEach(k => {
+    fetch('/api/agent/models/apikey', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({model_id: k.model, api_key: k.val}),
+    }).then(() => { done++; });
+  });
+
+  document.getElementById('apikeyMsg').innerHTML = '<span class="text-success">✅ API Key 已保存！</span>';
+  setTimeout(() => loadModels(), 800);
+}
+
+// ── 扫描本地 ──
+
+function scanLocalModels() {
+  document.getElementById('discoveredSection').style.display = 'block';
+  const el = document.getElementById('discoveredList');
+  el.innerHTML = '<div class="text-center text-muted py-2">🔍 正在扫描本地端点（Ollama / LM Studio / vLLM…）…</div>';
+
+  fetch('/api/agent/models/scan')
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success || !d.discovered?.length) {
+        el.innerHTML = '<div class="text-muted py-2">未发现本地运行的 AI 端点。请确保以下服务已启动：<br>• <a href="https://ollama.com" target="_blank">Ollama</a>（端口 11434）<br>• <a href="https://lmstudio.ai" target="_blank">LM Studio</a>（端口 1234）</div>';
+        return;
+      }
+      el.innerHTML = '<div class="small text-success mb-2">✅ 发现 ' + d.count + ' 个本地模型：</div>' +
+        d.discovered.map(m => `<div class="model-card discovered">
+          <strong>${esc(m.name)}</strong>
+          <span class="model-badge badge-local ms-2">本地</span>
+          <div class="small text-muted">Base URL: ${esc(m.base_url || '')}</div>
+          <div class="small"><code>${esc(m.id)}</code></div>
+        </div>`).join('');
+      setTimeout(() => loadModels(), 1000);
+    })
+    .catch(err => {
+      el.innerHTML = '<div class="text-danger">扫描失败: ' + err.message + '</div>';
+    });
+}
+
+// ── 上传模型 ──
+
+function uploadModelFile() {
+  const file = document.getElementById('modelFileInput').files[0];
+  if (!file) return;
+
+  const progressEl = document.getElementById('uploadProgress');
+  progressEl.innerHTML = '⏳ 上传中: ' + file.name + ' (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)…';
+
+  const formData = new FormData();
+  formData.append('file', file);
+  fetch('/api/agent/models/upload', {method: 'POST', body: formData})
+    .then(r => r.json())
+    .then(d => {
+      if (d.success) {
+        progressEl.innerHTML = '<span class="text-success">✅ 上传成功: ' + d.filename + ' (' + (d.size / 1024 / 1024).toFixed(1) + ' MB)</span><br><span class="small text-muted">保存位置: ' + d.path + '</span>';
+      } else {
+        progressEl.innerHTML = '<span class="text-danger">❌ ' + (d.error || '上传失败') + '</span>';
+      }
+    })
+    .catch(err => {
+      progressEl.innerHTML = '<span class="text-danger">❌ 上传失败: ' + err.message + '</span>';
+    });
+}
+
+// ── 添加新模型 ──
+
+function addNewModel() {
+  const data = {
+    id: document.getElementById('newModelId').value.trim(),
+    name: document.getElementById('newModelName').value.trim(),
+    provider: document.getElementById('newModelProvider').value,
+    model: document.getElementById('newModelModel').value.trim(),
+    base_url: document.getElementById('newModelBaseUrl').value.trim(),
+    api_key_env: document.getElementById('newModelApiKeyEnv').value.trim(),
+  };
+
+  if (!data.id || !data.name) {
+    alert('请填写模型 ID 和名称');
+    return;
+  }
+
+  fetch('/api/agent/models/config', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data),
+  }).then(r => r.json())
+    .then(d => {
+      if (d.success) {
+        if (typeof bootstrap !== 'undefined') bootstrap.Modal.getInstance(document.getElementById('addModelModal'))?.hide();
+        loadModels();
+      } else {
+        alert(d.error || '添加失败');
+      }
+    });
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
+}
+
+// 拖拽上传
+const zone = document.getElementById('uploadZone');
+if (zone) {
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.style.borderColor = '#1976d2'; });
+  zone.addEventListener('dragleave', () => { zone.style.borderColor = ''; });
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.style.borderColor = '';
+    document.getElementById('modelFileInput').files = e.dataTransfer.files;
+    uploadModelFile();
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% block title %}历史记录 - 财务审计工作台{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <div>
+    <h1>历史记录</h1>
+    <p class="page-desc">每次上传、识图或分析的数据都会自动保存，可随时重新加载</p>
+  </div>
+  <div class="page-actions">
+    <a href="/" class="btn btn-outline-primary btn-sm"><i class="bi bi-upload"></i> 上传新数据</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="panel mb-4 d-none" id="historySearchBar">
+  <div class="panel-body py-3">
+    <div class="row g-2 align-items-center">
+      <div class="col-md-6">
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="search" class="form-control" id="historySearchInput"
+                 placeholder="搜索标题或文件名..." autocomplete="off">
+          <button type="button" class="btn btn-outline-secondary" id="historySearchClear" title="清空">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <select class="form-select" id="historySourceFilter">
+          <option value="">全部来源</option>
+          <option value="file">文件上传</option>
+          <option value="image">图片识图</option>
+          <option value="import">数据导入</option>
+        </select>
+      </div>
+      <div class="col-md-3 text-md-end">
+        <span class="text-muted small" id="historyResultCount"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="historyLoading" class="loading-state">
+  <div class="spinner-border"></div>
+  <p class="mt-2">加载历史记录...</p>
+</div>
+
+<div id="historyEmpty" class="alert alert-info d-none">
+  暂无历史记录，<a href="/">上传数据</a> 后将自动保存。
+</div>
+
+<div id="historyNoMatch" class="alert alert-warning d-none">
+  未找到匹配的记录，请尝试其他关键词或筛选条件。
+</div>
+
+<div id="historyList" class="row d-none"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// 来源类型 → 中文标签
+const sourceLabels = { file: '文件上传', image: '图片识图', import: '数据导入' };
+
+/** HTML 转义，防止 XSS */
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** 将单条历史记录渲染为卡片 HTML */
+function renderHistoryCard(r) {
+  const risk = r.score?.overall_label || '--';
+  const rows = r.row_count || r.summary?.total_rows || 0;
+  const cols = r.column_count || r.summary?.total_columns || 0;
+  const label = sourceLabels[r.source_type] || r.source_type;
+  return `
+    <div class="col-md-6 col-lg-4 mb-3">
+      <div class="panel h-100 history-card" data-history-id="${r.id}" role="button" style="cursor:pointer">
+        <div class="panel-body">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <h6 class="mb-0 text-truncate" title="${escapeHtml(r.title)}">${escapeHtml(r.title)}</h6>
+            <span class="badge bg-secondary ms-1">${escapeHtml(label)}</span>
+          </div>
+          <p class="text-muted small mb-1">${escapeHtml(r.created_at)}</p>
+          <p class="small mb-2">${rows} 行 × ${cols} 列 · 风险: <strong>${escapeHtml(risk)}</strong></p>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-primary btn-sm btn-load" data-history-id="${r.id}">
+              <i class="bi bi-box-arrow-in-right"></i> 加载
+            </button>
+            <button type="button" class="btn btn-outline-danger btn-sm btn-delete" data-history-id="${r.id}">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+/** 防抖：输入停止 300ms 后再发起搜索请求 */
+function debounce(fn, ms) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
+
+/** 根据当前搜索条件从后端拉取并渲染列表 */
+function fetchHistoryRecords() {
+  const list = document.getElementById('historyList');
+  const emptyEl = document.getElementById('historyEmpty');
+  const noMatchEl = document.getElementById('historyNoMatch');
+  const countEl = document.getElementById('historyResultCount');
+  const q = document.getElementById('historySearchInput').value.trim();
+  const sourceType = document.getElementById('historySourceFilter').value;
+
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (sourceType) params.set('source_type', sourceType);
+
+  list.classList.add('d-none');
+  noMatchEl.classList.add('d-none');
+  emptyEl.classList.add('d-none');
+
+  return fetch('/api/history?' + params.toString())
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(data => {
+      const records = data.records || [];
+      countEl.textContent = records.length ? `共 ${records.length} 条` : '';
+      if (!records.length) {
+        if (q || sourceType) {
+          noMatchEl.classList.remove('d-none');
+        } else {
+          emptyEl.classList.remove('d-none');
+        }
+        return;
+      }
+      list.classList.remove('d-none');
+      list.innerHTML = records.map(renderHistoryCard).join('');
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const list = document.getElementById('historyList');
+  const searchBar = document.getElementById('historySearchBar');
+  const searchInput = document.getElementById('historySearchInput');
+  const sourceFilter = document.getElementById('historySourceFilter');
+  const searchClear = document.getElementById('historySearchClear');
+
+  list.addEventListener('click', (e) => {
+    const deleteBtn = e.target.closest('.btn-delete');
+    if (deleteBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      deleteHistory(deleteBtn.dataset.historyId, deleteBtn);
+      return;
+    }
+    const loadBtn = e.target.closest('.btn-load');
+    const card = e.target.closest('.history-card');
+    if (loadBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      loadHistory(loadBtn.dataset.historyId, loadBtn);
+    } else if (card) {
+      loadHistory(card.dataset.historyId, card);
+    }
+  });
+
+  const debouncedSearch = debounce(() => fetchHistoryRecords(), 300);
+  searchInput.addEventListener('input', debouncedSearch);
+  sourceFilter.addEventListener('change', () => fetchHistoryRecords());
+  searchClear.addEventListener('click', () => {
+    searchInput.value = '';
+    sourceFilter.value = '';
+    fetchHistoryRecords();
+  });
+
+  fetchHistoryRecords()
+    .then(() => {
+      document.getElementById('historyLoading').classList.add('d-none');
+      searchBar.classList.remove('d-none');
+    })
+    .catch(err => {
+      document.getElementById('historyLoading').innerHTML =
+        '<div class="alert alert-danger">加载失败: ' + escapeHtml(err.message) + '</div>';
+    });
+});
+
+function setLoading(el, loading) {
+  if (!el) return;
+  if (loading) {
+    el.dataset.prevHtml = el.innerHTML;
+    el.style.pointerEvents = 'none';
+    el.style.opacity = '0.6';
+    if (el.classList.contains('btn')) {
+      el.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 加载中...';
+      el.disabled = true;
+    }
+  } else if (el.dataset.prevHtml) {
+    el.innerHTML = el.dataset.prevHtml;
+    el.style.pointerEvents = '';
+    el.style.opacity = '';
+    el.disabled = false;
+  }
+}
+
+function loadHistory(id, triggerEl) {
+  if (!id) return;
+  setLoading(triggerEl, true);
+  fetch('/api/history/' + id + '/load', { method: 'POST' })
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(data => {
+      if (data.success) {
+        if (typeof showToast === 'function') showToast('历史记录已加载', 'success');
+        window.location.href = '/dashboard';
+      } else {
+        setLoading(triggerEl, false);
+        if (typeof showToast === 'function') showToast(data.error || '加载失败', 'error');
+        else alert(data.error || '加载失败');
+      }
+    })
+    .catch(err => {
+      setLoading(triggerEl, false);
+      if (typeof showToast === 'function') showToast('加载失败: ' + err.message, 'error');
+      else alert('加载失败: ' + err.message);
+    });
+}
+
+function deleteHistory(id, triggerEl) {
+  if (!id) return;
+  if (!confirm('确定删除这条历史记录？')) return;
+  if (triggerEl) triggerEl.disabled = true;
+  fetch('/api/history/' + id, { method: 'DELETE' })
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(data => {
+      if (data.success) fetchHistoryRecords();
+      else {
+        if (triggerEl) triggerEl.disabled = false;
+        if (typeof showToast === 'function') showToast(data.error || '删除失败', 'error');
+        else alert(data.error || '删除失败');
+      }
+    })
+    .catch(err => {
+      if (triggerEl) triggerEl.disabled = false;
+      if (typeof showToast === 'function') showToast('删除失败: ' + err.message, 'error');
+      else alert('删除失败: ' + err.message);
+    });
+}
+</script>
+{% endblock %}
